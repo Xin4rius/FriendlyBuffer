@@ -2,4 +2,3 @@ package-as: FriendlyBuffer
 
 ignore:
   - tests
-  - .remember
