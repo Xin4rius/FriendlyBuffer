@@ -11,6 +11,7 @@
 ## Notes-koKR: 버프가 필요한 주변 플레이어를 보여주고, 이름을 클릭하면 알맞은 버프를 시전합니다.
 ## Notes-zhCN: 列出附近需要你的增益的玩家；点击名字即可施放合适的增益。
 ## Notes-zhTW: 列出附近需要你的增益的玩家；點擊名字即可施放合適的增益。
+## IconTexture: Interface\AddOns\FriendlyBuffer\Media\icon
 ## Author: Xin4rius
 ## Version: 1.1.0
 ## SavedVariablesPerCharacter: FriendlyBufferCharDB

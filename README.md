@@ -1,3 +1,5 @@
+<p align="center"><img src="Media/logo.png" width="160" alt="FriendlyBuffer"></p>
+
 # FriendlyBuffer
 
 Addon WoW Forever (Interface 16001) : une petite fenêtre liste les joueurs proches à qui vous
