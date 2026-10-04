@@ -116,6 +116,12 @@ local function restyle(frame, unit)
     local name = nameOf(frame)
     if not name then return end
     applyFont(name)
+    -- Blizzard ancre le nom à gauche et à droite de la barre (largeur fixe) : avec une grande
+    -- police il serait tronqué (« ... »). Un seul point d'ancrage : la largeur suit le texte.
+    name:ClearAllPoints()
+    name:SetPoint("CENTER", frame, "CENTER", 0, 0)
+    name:SetWidth(0)
+    name:SetWordWrap(false)
     local r, g, b = selectionColor(unit)
     if r then setNameColor(name, r, g, b) end
     local guild = guildName(unit)
@@ -132,12 +138,15 @@ end
 
 -- Apparence d'origine du nom, pour la rendre quand la barre est recyclée ou l'option coupée.
 local function saveStyle(name)
+    local points = {}
+    for i = 1, name:GetNumPoints() do points[i] = { name:GetPoint(i) } end
     return {
         color = { getNameColor(name) },
         fontObject = name.GetFontObject and name:GetFontObject() or nil,
         font = { name:GetFont() },
         shadowOffset = { name:GetShadowOffset() },
         shadowColor = { name:GetShadowColor() },
+        points = points,
     }
 end
 
@@ -150,6 +159,8 @@ local function restoreStyle(name, style)
     end
     name:SetShadowOffset(style.shadowOffset[1] or 0, style.shadowOffset[2] or 0)
     name:SetShadowColor(style.shadowColor[1] or 0, style.shadowColor[2] or 0, style.shadowColor[3] or 0, style.shadowColor[4] or 1)
+    name:ClearAllPoints()
+    for _, point in ipairs(style.points) do name:SetPoint(unpack(point)) end
 end
 -- Masque tout ce qui compose la barre (barre de vie, bordure, icônes…) sauf le nom.
 -- Si le nom est imbriqué dans un élément (ex. la barre de vie), on descend dans cet élément.

@@ -27,7 +27,14 @@ function methods:SetText(t) self.text = t end
 function methods:GetText() return self.text end
 function methods:GetChecked() return false end
 function methods:IsMouseOver() return false end
-function methods:GetPoint() return "CENTER", nil, "CENTER", 10, 20 end
+function methods:SetPoint(...) local pts = rawget(self, "points") or {}; pts[#pts + 1] = { ... }; self.points = pts end
+function methods:ClearAllPoints() self.points = {} end
+function methods:GetNumPoints() return #(rawget(self, "points") or {}) end
+function methods:GetPoint(i)
+    local pts = rawget(self, "points")
+    if pts and pts[i or 1] then return unpack(pts[i or 1]) end
+    return "CENTER", nil, "CENTER", 10, 20
+end
 function methods:RegisterEvent(e) self.events[e] = true end
 function methods:GetID() return 42 end
 function methods:SetAlpha(a) self.alpha = a end
@@ -237,6 +244,7 @@ for i = 1, 4 do if row(i).scripts.OnEnter then row(i).scripts.OnEnter(row(i)) en
 local uf = newObject()
 uf.healthBar = newObject(); uf.name = newObject(); uf.border = newObject()
 uf.children = { uf.healthBar }; uf.regions = { uf.name, uf.border }; uf.name.parent = uf
+uf.name.points = { { "BOTTOMLEFT", uf.healthBar, "TOPLEFT", 0, 4 }, { "BOTTOMRIGHT", uf.healthBar, "TOPRIGHT", 0, 4 } }
 plates.nameplate1 = { UnitFrame = uf }
 ns.db.hiddenPlates = true
 ns.OnSettingsChanged()
@@ -245,6 +253,7 @@ check(uf.healthBar.alpha == 0 and uf.border.alpha == 0 and uf.name.alpha ~= 0 an
 check(uf.name.color and uf.name.color[3] == 1 and uf.name.color[1] == 0, "nom coloré comme sans Maj+V (UnitSelectionColor)")
 local fo = uf.name.fontObject
 check(type(fo) == "table" and fo.members[1].file == "Fonts\\FRIZQT__.TTF" and fo.members[1].height == 12 and fo.members[1].flags == "" and uf.name.shadow[1] == 1, "style par défaut : Friz 12, sans contour, ombre")
+check(#uf.name.points == 1 and uf.name.points[1][1] == "CENTER", "nom ancré en un seul point : jamais tronqué")
 check(type(fo) == "table" and fo.members[4].alphabet == "simplifiedchinese" and fo.members[4].file == "Fonts\\ARKai_T.ttf", "police de secours pour le chinois")
 check(uf.friendlyBufferGuild and uf.friendlyBufferGuild.text == "<Les Gardiens>" and uf.friendlyBufferGuild.shown, "guilde affichée sous le nom")
 ns.db.plateOutline, ns.db.plateFontSize, ns.db.plateShadow, ns.db.plateFont = "thick", 14, false, "arial"
@@ -256,6 +265,7 @@ check(uf.name.color[1] == 0, "couleur réappliquée après une mise à jour de B
 fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
 check(uf.healthBar.alpha == 1 and uf.border.alpha == 1 and uf.name.color[1] == 1, "barre recyclée : visibilité et couleur d'origine rendues")
 check(uf.name.fontObject == "ORIG_OBJ" and uf.friendlyBufferGuild.shown == false, "barre recyclée : police d'origine rendue, guilde masquée")
+check(#uf.name.points == 2 and uf.name.points[1][1] == "BOTTOMLEFT", "barre recyclée : ancrages d'origine rendus")
 fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
 check(uf.healthBar.alpha == 0 and uf.name.alpha ~= 0, "nouvelle barre alliée : barre masquée, nom visible")
 ns.db.hiddenPlates = false
