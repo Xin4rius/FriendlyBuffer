@@ -19,7 +19,8 @@ inférieur** à ce que vous pouvez lui poser (en tenant compte de son niveau).
 
 - `/fb` : afficher / masquer la fenêtre
 - `/fb options` : paramètres (aussi dans Options → AddOns → FriendlyBuffer)
-- `/fb debug` : affiche ce que l'addon détecte sur votre cible et sa décision
+- `/fb debug` : bilan du scan (candidats, rejets, barres de nom) et analyse de votre cible
+- `/fb plaques` : active / désactive les barres de nom alliées (aussi Maj+V)
 - `/fb reset` : replace la fenêtre au centre
 
 Joueurs hors groupe : activez les **barres de nom alliées** pour qu'ils soient détectés. Le clic

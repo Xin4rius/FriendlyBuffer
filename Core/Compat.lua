@@ -70,6 +70,25 @@ function Compat.ItemCount(itemId)
     return GetItemCount(itemId)
 end
 
+function Compat.GetCVar(name)
+    if C_CVar and C_CVar.GetCVar then return C_CVar.GetCVar(name) end
+    return GetCVar(name)
+end
+
+function Compat.SetCVar(name, value)
+    if C_CVar and C_CVar.SetCVar then return C_CVar.SetCVar(name, value) end
+    return SetCVar(name, value)
+end
+
+-- Les inconnus ne sont visibles par l'API qu'à travers les barres de nom alliées.
+function Compat.FriendlyNameplatesShown()
+    return Compat.GetCVar("nameplateShowFriends") == "1"
+end
+
+function Compat.SetFriendlyNameplates(shown)
+    Compat.SetCVar("nameplateShowFriends", shown and "1" or "0")
+end
+
 function Compat.ClassColor(class)
     local c = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[class]
     if c then return c.r, c.g, c.b end

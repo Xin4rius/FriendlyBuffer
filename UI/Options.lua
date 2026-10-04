@@ -163,11 +163,17 @@ function Options.Create()
 
     checkbox(panel, "Utiliser les buffs de groupe / supérieurs (clic gauche, membres du groupe)", "groupBuffs", 16, -60)
     checkbox(panel, "Inclure les joueurs hors groupe (barres de nom alliées, cible, survol)", "includeStrangers", 16, -86)
-    checkbox(panel, "Masquer la fenêtre quand personne n'a besoin de buff", "autoHide", 16, -112)
-    checkbox(panel, "Verrouiller la position de la fenêtre", "locked", 16, -138)
+    local plates = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+    plates:SetPoint("TOPLEFT", 40, -112)
+    label(panel, "Afficher les barres de nom alliées (nécessaire pour détecter les inconnus)"):SetPoint("LEFT", plates, "RIGHT", 2, 1)
+    plates:SetScript("OnClick", function() ns.ToggleNameplates(); changed() end)
+    refreshers[#refreshers + 1] = function() plates:SetChecked(ns.Compat.FriendlyNameplatesShown()) end
+
+    checkbox(panel, "Masquer la fenêtre quand personne n'a besoin de buff", "autoHide", 16, -138)
+    checkbox(panel, "Verrouiller la position de la fenêtre", "locked", 16, -164)
 
     local modeLabel = label(panel, "Mode d'affichage")
-    modeLabel:SetPoint("TOPLEFT", 20, -174)
+    modeLabel:SetPoint("TOPLEFT", 20, -200)
     local modeButton = smallButton(panel, "", 160, function()
         local modes = ns.Config.DISPLAY_MODES
         for i, m in ipairs(modes) do
@@ -178,14 +184,14 @@ function Options.Create()
         end
         changed()
     end)
-    modeButton:SetPoint("TOPLEFT", 250, -171)
+    modeButton:SetPoint("TOPLEFT", 250, -197)
     refreshers[#refreshers + 1] = function() modeButton:SetText(DISPLAY_LABELS[ns.db.displayMode]) end
 
-    stepper(panel, "Nombre de lignes maximum", "maxRows", 20, -204, 1, 1, 20, "%d")
-    stepper(panel, "Expire bientôt (buffs de 5/10 min)", "thresholdShort", 20, -230, 15, 15, 300, "%d s")
-    stepper(panel, "Expire bientôt (buffs 30/60 min)", "thresholdLong", 20, -256, 30, 30, 900, "%d s")
+    stepper(panel, "Nombre de lignes maximum", "maxRows", 20, -230, 1, 1, 20, "%d")
+    stepper(panel, "Expire bientôt (buffs de 5/10 min)", "thresholdShort", 20, -256, 15, 15, 300, "%d s")
+    stepper(panel, "Expire bientôt (buffs 30/60 min)", "thresholdLong", 20, -282, 30, 30, 900, "%d s")
 
-    buildPriorities(panel, -296)
+    buildPriorities(panel, -322)
 
     panel:SetScript("OnShow", function()
         for _, refresh in ipairs(refreshers) do refresh() end

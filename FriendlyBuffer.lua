@@ -97,6 +97,40 @@ function ns.OnSettingsChanged() scan() end
 -- Commandes
 ---------------------------------------------------------------------------
 
+local NAMEPLATE_HINT = "les joueurs hors groupe ne sont détectés que via les barres de nom alliées, actuellement désactivées : touche Maj+V ou /fb plaques."
+
+local function warnNameplates()
+    if ns.db.includeStrangers and not ns.Compat.FriendlyNameplatesShown() then say(NAMEPLATE_HINT) end
+end
+
+local function toggleNameplates()
+    if InCombatLockdown() then
+        say("impossible pendant le combat.")
+        return
+    end
+    local shown = not ns.Compat.FriendlyNameplatesShown()
+    ns.Compat.SetFriendlyNameplates(shown)
+    say(shown and "barres de nom alliées activées." or "barres de nom alliées désactivées.")
+    ns.RequestScan()
+end
+ns.ToggleNameplates = toggleNameplates
+
+-- Bilan du scan : pourquoi la liste est (ou non) vide.
+local function debugScan()
+    local candidates, rejected = ns.Scanner.Collect(ns.db.includeStrangers)
+    local group, strangers = 0, 0
+    for _, c in ipairs(candidates) do
+        if c.isGroup then group = group + 1 else strangers = strangers + 1 end
+    end
+    local parts = {}
+    for reason, count in pairs(rejected) do parts[#parts + 1] = reason .. "=" .. count end
+    say(string.format("scan : %d candidats (%d groupe, %d hors groupe), %d à buffer ; rejetés : %s",
+        #candidates, group, strangers, #buildRows(), #parts > 0 and table.concat(parts, ", ") or "aucun"))
+    say("inconnus inclus : " .. (ns.db.includeStrangers and "oui" or "non")
+        .. " ; barres de nom alliées : " .. (ns.Compat.FriendlyNameplatesShown() and "activées" or "DÉSACTIVÉES")
+        .. " ; fenêtre masquée par /fb : " .. (ns.db.hidden and "oui" or "non"))
+end
+
 local function debugTarget()
     local unit = UnitExists("target") and "target" or "player"
     local _, class = UnitClass(unit)
@@ -111,6 +145,7 @@ local function debugTarget()
         say("votre classe n'a aucun buff géré.")
         return
     end
+    debugScan()
     local need = ns.Decision.Evaluate(ns.classData, {
         isKnown = ns.Compat.IsKnown, settings = ns.db, priorities = ns.db.priorities[class],
     }, { level = UnitLevel(unit), isGroup = UnitInParty(unit) or UnitInRaid(unit) or UnitIsUnit(unit, "player"), auras = ns.Auras.Read(unit) })
@@ -144,8 +179,10 @@ SlashCmdList.FRIENDLYBUFFER = function(input)
         debugTarget()
     elseif cmd == "reset" then
         ns.MainFrame.ResetPosition()
+    elseif cmd == "plaques" or cmd == "nameplates" then
+        toggleNameplates()
     else
-        say("/fb (afficher/masquer), /fb options, /fb debug (analyse la cible), /fb reset (position)")
+        say("/fb (afficher/masquer), /fb options, /fb debug (analyse la cible), /fb plaques (barres de nom alliées), /fb reset (position)")
     end
 end
 
@@ -176,6 +213,8 @@ local function onLogin()
         say("votre classe n'a aucun buff géré ; l'addon reste inactif.")
         return
     end
+    say("chargé (" .. (UnitClass("player")) .. "). /fb options pour les réglages, /fb debug en cas de souci.")
+    warnNameplates()
 
     for _, event in ipairs(SCAN_EVENTS) do events:RegisterEvent(event) end
     events:RegisterEvent("PLAYER_REGEN_ENABLED")

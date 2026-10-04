@@ -25,14 +25,16 @@ local function strangerUnits()
     return units
 end
 
+-- Retourne true, ou false + raison du rejet (pour /fb debug).
 local function isCandidate(unit, isGroup)
-    if not UnitExists(unit) or not UnitIsPlayer(unit) then return false end
-    if not UnitIsConnected(unit) or UnitIsDeadOrGhost(unit) then return false end
-    if not UnitCanAssist("player", unit) then return false end
+    if not UnitExists(unit) then return false, nil end
+    if not UnitIsPlayer(unit) then return false, "pnj" end
+    if not UnitIsConnected(unit) or UnitIsDeadOrGhost(unit) then return false, "mort/déco" end
+    if not UnitCanAssist("player", unit) then return false, "non assistable" end
     if not isGroup then
-        if UnitInParty(unit) or UnitInRaid(unit) or UnitIsUnit(unit, "player") then return false end
+        if UnitInParty(unit) or UnitInRaid(unit) or UnitIsUnit(unit, "player") then return false, nil end
         -- Ne pas se faire marquer JcJ en buffant un inconnu marqué.
-        if UnitIsPVP(unit) and not UnitIsPVP("player") then return false end
+        if UnitIsPVP(unit) and not UnitIsPVP("player") then return false, "JcJ" end
     end
     return true
 end
@@ -43,11 +45,16 @@ local function fullName(unit)
     return name
 end
 
--- Retourne { {unit, guid, name, class, level, isGroup}, ... }, dédoublonné par GUID.
+-- Retourne { {unit, guid, name, class, level, isGroup}, ... } dédoublonné par GUID,
+-- et le décompte des unités rejetées par raison.
 function Scanner.Collect(includeStrangers)
-    local result, seen = {}, {}
+    local result, seen, rejected = {}, {}, {}
     local function add(unit, isGroup)
-        if not isCandidate(unit, isGroup) then return end
+        local ok, reason = isCandidate(unit, isGroup)
+        if not ok then
+            if reason then rejected[reason] = (rejected[reason] or 0) + 1 end
+            return
+        end
         local guid = UnitGUID(unit)
         if not guid or seen[guid] then return end
         seen[guid] = true
@@ -61,5 +68,5 @@ function Scanner.Collect(includeStrangers)
     if includeStrangers then
         for _, unit in ipairs(strangerUnits()) do add(unit, false) end
     end
-    return result
+    return result, rejected
 end

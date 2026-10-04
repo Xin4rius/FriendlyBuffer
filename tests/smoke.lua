@@ -82,6 +82,8 @@ _G.C_Spell = {
 _G.C_Item = { GetItemCount = function() return 5 end }
 _G.RAID_CLASS_COLORS = setmetatable({}, { __index = function() return { r = 1, g = 1, b = 1 } end })
 _G.LOCALIZED_CLASS_NAMES_MALE = {}
+local cvars = { nameplateShowFriends = "0" }
+_G.C_CVar = { GetCVar = function(k) return cvars[k] end, SetCVar = function(k, v) cvars[k] = tostring(v) end }
 local optionsPanel
 _G.Settings = {
     RegisterCanvasLayoutCategory = function(panel) optionsPanel = panel; return newObject() end,
@@ -115,6 +117,12 @@ end
 
 -- Connexion + premier scan ----------------------------------------------------
 fire("PLAYER_LOGIN")
+local function printedMatch(pattern)
+    for _, line in ipairs(printed) do if line:match(pattern) then return true end end
+    return false
+end
+check(printedMatch("chargé"), "message de chargement")
+check(printedMatch("barres de nom alliées"), "avertissement barres de nom désactivées")
 local row = function(i) return _G["FriendlyBufferRow" .. i] end
 check(row(1).row and row(1).row.name == "Garrosh", "ligne 1 = Garrosh")
 check(row(2).row and row(2).row.name == "Jaina" and row(2).row.need.family == "spirit", "ligne 2 = Jaina / esprit")
@@ -158,7 +166,12 @@ check(ns.db.displayMode == "range", "mode d'affichage cyclé deux fois")
 for i = 1, 4 do if row(i).scripts.OnEnter then row(i).scripts.OnEnter(row(i)) end end
 
 -- Commandes
+printed = {}
 SlashCmdList.FRIENDLYBUFFER("debug")
+check(printedMatch("candidats"), "/fb debug affiche le bilan du scan")
+cvars.nameplateShowFriends = "0"
+SlashCmdList.FRIENDLYBUFFER("plaques")
+check(cvars.nameplateShowFriends == "1", "/fb plaques active les barres de nom alliées")
 SlashCmdList.FRIENDLYBUFFER("options")
 SlashCmdList.FRIENDLYBUFFER("reset")
 SlashCmdList.FRIENDLYBUFFER("")
