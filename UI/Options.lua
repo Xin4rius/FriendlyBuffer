@@ -152,54 +152,77 @@ local function buildPriorities(parent, y)
     end
 end
 
-function Options.Create()
-    panel = CreateFrame("Frame")
-    panel:Hide()
-
-    local title = label(panel, "FriendlyBuffer", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 16, -16)
-    local sub = label(panel, "Liste les joueurs proches à buffer ; cliquez sur un nom pour lancer le buff.", "GameFontHighlightSmall")
-    sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
-
-    checkbox(panel, "Utiliser les buffs de groupe / supérieurs (clic gauche, membres du groupe)", "groupBuffs", 16, -60)
-    checkbox(panel, "Inclure les joueurs hors groupe (barres de nom alliées, cible, survol)", "includeStrangers", 16, -86)
-    local plates = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
-    plates:SetPoint("TOPLEFT", 40, -112)
-    label(panel, "Afficher les barres de nom alliées (nécessaire pour détecter les inconnus)"):SetPoint("LEFT", plates, "RIGHT", 2, 1)
-    plates:SetScript("OnClick", function() ns.ToggleNameplates(); changed() end)
-    refreshers[#refreshers + 1] = function() plates:SetChecked(ns.Compat.FriendlyNameplatesShown()) end
-
-    checkbox(panel, "Barres de nom alliées discrètes (seul le nom reste affiché, non cliquables)", "hiddenPlates", 40, -138)
-    checkbox(panel, "Masquer la fenêtre quand personne n'a besoin de buff", "autoHide", 16, -164)
-    checkbox(panel, "Verrouiller la position de la fenêtre", "locked", 16, -190)
-
-    local modeLabel = label(panel, "Mode d'affichage")
-    modeLabel:SetPoint("TOPLEFT", 20, -226)
-    local modeButton = smallButton(panel, "", 160, function()
-        local modes = ns.Config.DISPLAY_MODES
-        for i, m in ipairs(modes) do
-            if m == ns.db.displayMode then
-                ns.db.displayMode = modes[i % #modes + 1]
+-- Bouton qui fait défiler les valeurs d'une liste { {key, label}, ... }.
+local function cycle(parent, text, key, list, x, y)
+    local fs = label(parent, text)
+    fs:SetPoint("TOPLEFT", x, y)
+    local button = smallButton(parent, "", 160, function()
+        for i, entry in ipairs(list) do
+            if entry.key == ns.db[key] then
+                ns.db[key] = list[i % #list + 1].key
                 break
             end
         end
         changed()
     end)
-    modeButton:SetPoint("TOPLEFT", 250, -223)
-    refreshers[#refreshers + 1] = function() modeButton:SetText(DISPLAY_LABELS[ns.db.displayMode]) end
+    button:SetPoint("TOPLEFT", x + 230, y + 3)
+    refreshers[#refreshers + 1] = function() button:SetText(ns.Config.Find(list, ns.db[key]).label) end
+end
 
-    stepper(panel, "Nombre de lignes maximum", "maxRows", 20, -256, 1, 1, 20, "%d")
-    stepper(panel, "Expire bientôt (buffs de 5/10 min)", "thresholdShort", 20, -282, 15, 15, 300, "%d s")
-    stepper(panel, "Expire bientôt (buffs 30/60 min)", "thresholdLong", 20, -308, 30, 30, 900, "%d s")
+local CONTENT_WIDTH, CONTENT_HEIGHT = 640, 760
 
-    buildPriorities(panel, -348)
+function Options.Create()
+    panel = CreateFrame("Frame")
+    panel:Hide()
+
+    -- Contenu défilant : le panneau est plus haut que la fenêtre d'options.
+    -- ScrollFrameTemplate : modèle moderne présent sur Forever (utilisé aussi par Leatrix Plus).
+    local scroll = CreateFrame("ScrollFrame", nil, panel, "ScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 0, -4)
+    scroll:SetPoint("BOTTOMRIGHT", -28, 4)
+    local content = CreateFrame("Frame", nil, scroll)
+    content:SetSize(CONTENT_WIDTH, CONTENT_HEIGHT)
+    scroll:SetScrollChild(content)
+
+    local title = label(content, "FriendlyBuffer", "GameFontNormalLarge")
+    title:SetPoint("TOPLEFT", 16, -16)
+    local sub = label(content, "Liste les joueurs proches à buffer ; cliquez sur un nom pour lancer le buff (Alt + clic : sélectionner).", "GameFontHighlightSmall")
+    sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
+
+    checkbox(content, "Utiliser les buffs de groupe / supérieurs (clic gauche, membres du groupe)", "groupBuffs", 16, -60)
+    checkbox(content, "Inclure les joueurs hors groupe (barres de nom alliées, cible)", "includeStrangers", 16, -86)
+    local plates = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
+    plates:SetPoint("TOPLEFT", 40, -112)
+    label(content, "Afficher les barres de nom alliées (nécessaire pour détecter les inconnus)"):SetPoint("LEFT", plates, "RIGHT", 2, 1)
+    plates:SetScript("OnClick", function() ns.ToggleNameplates(); changed() end)
+    refreshers[#refreshers + 1] = function() plates:SetChecked(ns.Compat.FriendlyNameplatesShown()) end
+
+    checkbox(content, "Barres de nom alliées discrètes (seul le nom reste affiché, non cliquables)", "hiddenPlates", 40, -138)
+    checkbox(content, "Masquer la fenêtre quand personne n'a besoin de buff", "autoHide", 16, -164)
+    checkbox(content, "Verrouiller la position de la fenêtre", "locked", 16, -190)
+
+    local modes = {}
+    for _, mode in ipairs(ns.Config.DISPLAY_MODES) do modes[#modes + 1] = { key = mode, label = DISPLAY_LABELS[mode] } end
+    cycle(content, "Mode d'affichage", "displayMode", modes, 20, -226)
+
+    stepper(content, "Nombre de lignes maximum", "maxRows", 20, -256, 1, 1, 20, "%d")
+    stepper(content, "Expire bientôt (buffs de 5/10 min)", "thresholdShort", 20, -282, 15, 15, 300, "%d s")
+    stepper(content, "Expire bientôt (buffs 30/60 min)", "thresholdLong", 20, -308, 30, 30, 900, "%d s")
+
+    local namesHeader = label(content, "Noms des barres de nom discrètes", "GameFontNormalLarge")
+    namesHeader:SetPoint("TOPLEFT", 16, -348)
+    cycle(content, "Police", "plateFont", ns.Config.PLATE_FONTS, 20, -378)
+    cycle(content, "Contour", "plateOutline", ns.Config.PLATE_OUTLINES, 20, -404)
+    stepper(content, "Taille", "plateFontSize", 20, -430, 1, 8, 24, "%d")
+    checkbox(content, "Ombre", "plateShadow", 16, -452)
+
+    buildPriorities(content, -500)
 
     panel:SetScript("OnShow", function()
         for _, refresh in ipairs(refreshers) do refresh() end
     end)
     handle = ns.Compat.RegisterOptions(panel, "FriendlyBuffer")
 end
-
 function Options.Open()
     if handle then ns.Compat.OpenOptions(handle) end
 end

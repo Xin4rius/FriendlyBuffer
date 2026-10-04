@@ -6,6 +6,26 @@ ns.Config = Config
 
 Config.DISPLAY_MODES = { "minimal", "info" }
 
+-- Style des noms des barres de nom discrètes.
+Config.PLATE_FONTS = {
+    { key = "friz", label = "Friz Quadrata", path = "Fonts\\FRIZQT__.TTF" },
+    { key = "arial", label = "Arial Narrow", path = "Fonts\\ARIALN.TTF" },
+    { key = "skurri", label = "Skurri", path = "Fonts\\skurri.ttf" },
+    { key = "morpheus", label = "Morpheus", path = "Fonts\\MORPHEUS.TTF" },
+}
+Config.PLATE_OUTLINES = {
+    { key = "none", label = "Aucun", flags = "" },
+    { key = "thin", label = "Fin", flags = "OUTLINE" },
+    { key = "thick", label = "Épais", flags = "THICKOUTLINE" },
+}
+
+function Config.Find(list, key)
+    for _, entry in ipairs(list) do
+        if entry.key == key then return entry end
+    end
+    return list[1]
+end
+
 local DEFAULTS = {
     groupBuffs = false,
     displayMode = "minimal",
@@ -14,6 +34,11 @@ local DEFAULTS = {
     maxRows = 10,
     includeStrangers = true,
     hiddenPlates = false,
+    -- Par défaut : aspect des noms de WoW sans Maj+V.
+    plateFont = "friz",
+    plateFontSize = 12,
+    plateOutline = "none",
+    plateShadow = true,
     thresholdShort = 60,
     thresholdLong = 180,
 }

@@ -44,7 +44,8 @@ tant que le curseur est sur la fenêtre, pour éviter de cliquer sur le mauvais 
 ## Options
 
 Buffs de groupe (clic gauche groupe / clic droit individuel), inclure les inconnus, masquage
-automatique, verrouillage, mode d'affichage (minimaliste, informatif),
+automatique, verrouillage, mode d'affichage (minimaliste, informatif), apparence des noms des
+barres discrètes (police, contour, taille, ombre ; par défaut comme les noms de WoW sans Maj+V),
 nombre de lignes, seuils « expire bientôt », et priorités des buffs par classe de cible.
 
 ## Tests hors jeu

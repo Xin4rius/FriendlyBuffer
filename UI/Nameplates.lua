@@ -37,14 +37,42 @@ local function getNameColor(name)
     return name:GetTextColor()
 end
 
--- Couleur du nom comme sans Maj+V : celle que le jeu utilise pour la sélection
--- (bleu allié, vert allié JcJ, etc.).
-local function recolor(frame, unit)
+-- Style du nom : police, taille, contour et ombre choisis dans les options ; couleur comme
+-- sans Maj+V, celle que le jeu utilise pour la sélection (bleu allié, vert allié JcJ, etc.).
+local function restyle(frame, unit)
     local name = nameOf(frame)
-    if not name or not UnitSelectionColor then return end
+    if not name then return end
+    local db = ns.db
+    local font = ns.Config.Find(ns.Config.PLATE_FONTS, db.plateFont)
+    local outline = ns.Config.Find(ns.Config.PLATE_OUTLINES, db.plateOutline)
+    name:SetFont(font.path, db.plateFontSize, outline.flags)
+    if db.plateShadow then
+        name:SetShadowColor(0, 0, 0, 1)
+        name:SetShadowOffset(1, -1)
+    else
+        name:SetShadowOffset(0, 0)
+    end
+    if not UnitSelectionColor then return end
     local r, g, b = UnitSelectionColor(unit, true)
     if r == nil or ns.Compat.IsSecret(r) then return end
     setNameColor(name, r, g, b)
+end
+
+-- Apparence d'origine du nom, pour la rendre quand la barre est recyclée ou l'option coupée.
+local function saveStyle(name)
+    return {
+        color = { getNameColor(name) },
+        font = { name:GetFont() },
+        shadowOffset = { name:GetShadowOffset() },
+        shadowColor = { name:GetShadowColor() },
+    }
+end
+
+local function restoreStyle(name, style)
+    setNameColor(name, style.color[1], style.color[2], style.color[3])
+    if style.font[1] then name:SetFont(style.font[1], style.font[2], style.font[3]) end
+    name:SetShadowOffset(style.shadowOffset[1] or 0, style.shadowOffset[2] or 0)
+    name:SetShadowColor(style.shadowColor[1] or 0, style.shadowColor[2] or 0, style.shadowColor[3] or 0, style.shadowColor[4] or 1)
 end
 
 -- Masque tout ce qui compose la barre (barre de vie, bordure, icônes…) sauf le nom.
@@ -52,7 +80,7 @@ end
 local function keepOnlyName(frame, unit)
     if hidden[frame] then
         hidden[frame].unit = unit
-        recolor(frame, unit)
+        restyle(frame, unit)
         return
     end
     local name, faded = nameOf(frame), {}
@@ -71,24 +99,23 @@ local function keepOnlyName(frame, unit)
         end
     end
     fadeContents(frame)
-    local color = name and { getNameColor(name) }
-    hidden[frame] = { faded = faded, unit = unit, color = color }
-    recolor(frame, unit)
+    hidden[frame] = { faded = faded, unit = unit, style = name and saveStyle(name) }
+    restyle(frame, unit)
 end
 
 local function restore(frame)
     local state = frame and hidden[frame]
     if not state then return end
     for _, object in ipairs(state.faded) do object:SetAlpha(1) end
-    if state.color then setNameColor(nameOf(frame), state.color[1], state.color[2], state.color[3]) end
+    if state.style then restoreStyle(nameOf(frame), state.style) end
     hidden[frame] = nil
 end
 
--- Blizzard réécrit la couleur du nom à chaque mise à jour de la barre : on la réapplique.
+-- Blizzard réécrit la couleur du nom à chaque mise à jour de la barre : on réapplique le style.
 if hooksecurefunc and CompactUnitFrame_UpdateName then
     hooksecurefunc("CompactUnitFrame_UpdateName", function(frame)
         local state = hidden[frame]
-        if state then recolor(frame, state.unit) end
+        if state then restyle(frame, state.unit) end
     end)
 end
 

@@ -33,6 +33,11 @@ function methods:GetID() return 42 end
 function methods:SetAlpha(a) self.alpha = a end
 function methods:SetTextColor(r, g, b) self.color = { r, g, b } end
 function methods:GetTextColor() local c = rawget(self, "color") or { 1, 1, 1 }; return c[1], c[2], c[3] end
+function methods:SetFont(path, size, flags) self.font = { path, size, flags } end
+function methods:GetFont() local f = rawget(self, "font") or { "Fonts\\ORIG.TTF", 9, "OUTLINE" }; return f[1], f[2], f[3] end
+function methods:SetShadowOffset(x, y) self.shadow = { x, y } end
+function methods:GetShadowOffset() local s = rawget(self, "shadow") or { 0, 0 }; return s[1], s[2] end
+function methods:GetShadowColor() return 0, 0, 0, 1 end
 methods.SetVertexColor = methods.SetTextColor
 methods.GetVertexColor = methods.GetTextColor
 function methods:GetChildren() return unpack(rawget(self, "children") or {}) end
@@ -204,6 +209,8 @@ for _ = 1, 2 do
     end
 end
 check(ns.db.displayMode == "minimal", "mode d'affichage : minimaliste <-> informatif")
+check(ns.db.plateFont == "skurri" and ns.db.plateOutline == "thick", "options : police et contour défilent")
+ns.db.plateFont, ns.db.plateFontSize, ns.db.plateOutline, ns.db.plateShadow = "friz", 12, "none", true
 for i = 1, 4 do if row(i).scripts.OnEnter then row(i).scripts.OnEnter(row(i)) end end
 
 -- Barres de nom invisibles
@@ -216,10 +223,15 @@ ns.OnSettingsChanged()
 check(cvars.nameplateShowFriends == "1" and clickThrough == true, "barres invisibles : CVar + clic traversant")
 check(uf.healthBar.alpha == 0 and uf.border.alpha == 0 and uf.name.alpha ~= 0 and uf.alpha ~= 0, "barres invisibles : barre masquée, nom visible")
 check(uf.name.color and uf.name.color[3] == 1 and uf.name.color[1] == 0, "nom coloré comme sans Maj+V (UnitSelectionColor)")
+check(uf.name.font[1] == "Fonts\\FRIZQT__.TTF" and uf.name.font[2] == 12 and uf.name.font[3] == "" and uf.name.shadow[1] == 1, "style par défaut : Friz 12, sans contour, ombre")
+ns.db.plateOutline, ns.db.plateFontSize, ns.db.plateShadow, ns.db.plateFont = "thick", 14, false, "arial"
+ns.OnSettingsChanged()
+check(uf.name.font[1] == "Fonts\\ARIALN.TTF" and uf.name.font[2] == 14 and uf.name.font[3] == "THICKOUTLINE" and uf.name.shadow[1] == 0, "style personnalisé appliqué")
 CompactUnitFrame_UpdateName(uf); if blizzardHooks.CompactUnitFrame_UpdateName then blizzardHooks.CompactUnitFrame_UpdateName(uf) end
 check(uf.name.color[1] == 0, "couleur réappliquée après une mise à jour de Blizzard")
 fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
 check(uf.healthBar.alpha == 1 and uf.border.alpha == 1 and uf.name.color[1] == 1, "barre recyclée : visibilité et couleur d'origine rendues")
+check(uf.name.font[1] == "Fonts\\ORIG.TTF" and uf.name.font[3] == "OUTLINE", "barre recyclée : police d'origine rendue")
 fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
 check(uf.healthBar.alpha == 0 and uf.name.alpha ~= 0, "nouvelle barre alliée : barre masquée, nom visible")
 ns.db.hiddenPlates = false

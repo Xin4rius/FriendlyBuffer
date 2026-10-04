@@ -255,6 +255,11 @@ test("Compare : joueurs derrière un obstacle en dernier", function()
     eq(rows[1].name, "Zed"); eq(rows[2].name, "Al")
 end)
 
+test("Config.Load : style des noms par défaut", function()
+    local db = ns.Config.Load({}, PRIEST)
+    eq(db.plateFont, "friz"); eq(db.plateFontSize, 12); eq(db.plateOutline, "none"); eq(db.plateShadow, true)
+end)
+
 test("Config.Load : ancien mode « range » converti", function()
     local db = ns.Config.Load({ displayMode = "range" }, PRIEST)
     eq(db.displayMode, "info")
