@@ -98,3 +98,7 @@ git push origin v1.2.0
 
 Un tag contenant `beta` ou `alpha` donne une pré-version. Pour créer la release d'un tag déjà
 poussé : Actions → CI / Release → Run workflow, avec le tag.
+
+## Licence
+
+[MIT](LICENSE) © 2026 Xin4rius
