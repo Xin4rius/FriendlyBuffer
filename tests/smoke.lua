@@ -241,37 +241,43 @@ check(ns.db.displayMode == "info" and ns.db.plateFont == "morpheus" and ns.db.pl
 ns.db.plateFont, ns.db.plateFontSize, ns.db.plateOutline, ns.db.plateShadow, ns.db.plateGuild = "friz", 12, "none", true, true
 for i = 1, 4 do if row(i).scripts.OnEnter then row(i).scripts.OnEnter(row(i)) end end
 
--- Barres de nom invisibles
+-- Barres de nom discrètes. Le nom de Blizzard est une région « restreinte » : toute mesure
+-- (GetPoint, GetWidth…) ou lecture de style déclenche une erreur de taint en jeu.
 local uf = newObject()
 uf.healthBar = newObject(); uf.name = newObject(); uf.border = newObject()
 uf.children = { uf.healthBar }; uf.regions = { uf.name, uf.border }; uf.name.parent = uf
-uf.name.points = { { "BOTTOMLEFT", uf.healthBar, "TOPLEFT", 0, 4 }, { "BOTTOMRIGHT", uf.healthBar, "TOPRIGHT", 0, 4 } }
+uf.name.text = "Valeera Sanguinar"
+for _, method in ipairs({ "GetPoint", "GetNumPoints", "GetWidth", "GetHeight", "GetFont", "GetFontObject",
+    "GetShadowOffset", "GetShadowColor", "GetVertexColor", "GetTextColor", "GetStringWidth" }) do
+    uf.name[method] = function() error("Can't measure restricted regions: " .. method) end
+end
 plates.nameplate1 = { UnitFrame = uf }
 ns.db.hiddenPlates = true
 ns.OnSettingsChanged()
-check(cvars.nameplateShowFriends == "1" and clickThrough == true, "barres invisibles : CVar + clic traversant")
-check(uf.healthBar.alpha == 0 and uf.border.alpha == 0 and uf.name.alpha ~= 0 and uf.alpha ~= 0, "barres invisibles : barre masquée, nom visible")
-check(uf.name.color and uf.name.color[3] == 1 and uf.name.color[1] == 0, "nom coloré comme sans Maj+V (UnitSelectionColor)")
-local fo = uf.name.fontObject
-check(type(fo) == "table" and fo.members[1].file == "Fonts\\FRIZQT__.TTF" and fo.members[1].height == 12 and fo.members[1].flags == "" and uf.name.shadow[1] == 1, "style par défaut : Friz 12, sans contour, ombre")
-check(#uf.name.points == 1 and uf.name.points[1][1] == "CENTER", "nom ancré en un seul point : jamais tronqué")
+local own = uf.friendlyBufferName
+check(cvars.nameplateShowFriends == "1" and clickThrough == true, "barres discrètes : CVar + clic traversant")
+check(uf.healthBar.alpha == 0 and uf.border.alpha == 0 and uf.name.alpha == 0, "barres discrètes : barre et nom de Blizzard masqués")
+check(own and own.shown and own.text == "Valeera Sanguinar", "notre nom affiché à la place")
+check(own and own.color and own.color[1] == 0 and own.color[3] == 1, "nom coloré comme sans Maj+V (UnitSelectionColor)")
+local fo = own and own.fontObject
+check(type(fo) == "table" and fo.members[1].file == "Fonts\\FRIZQT__.TTF" and fo.members[1].height == 12 and fo.members[1].flags == "" and own.shadow[1] == 1, "style par défaut : Friz 12, sans contour, ombre")
+check(own and #own.points == 1 and own.points[1][1] == "CENTER", "nom ancré en un seul point : jamais tronqué")
 check(type(fo) == "table" and fo.members[4].alphabet == "simplifiedchinese" and fo.members[4].file == "Fonts\\ARKai_T.ttf", "police de secours pour le chinois")
 check(uf.friendlyBufferGuild and uf.friendlyBufferGuild.text == "<Les Gardiens>" and uf.friendlyBufferGuild.shown, "guilde affichée sous le nom")
 ns.db.plateOutline, ns.db.plateFontSize, ns.db.plateShadow, ns.db.plateFont = "thick", 14, false, "arial"
 ns.OnSettingsChanged()
-fo = uf.name.fontObject
-check(fo.members[1].file == "Fonts\\ARIALN.TTF" and fo.members[1].height == 14 and fo.members[1].flags == "THICKOUTLINE" and uf.name.shadow[1] == 0, "style personnalisé appliqué")
-CompactUnitFrame_UpdateName(uf); if blizzardHooks.CompactUnitFrame_UpdateName then blizzardHooks.CompactUnitFrame_UpdateName(uf) end
-check(uf.name.color[1] == 0, "couleur réappliquée après une mise à jour de Blizzard")
+fo = own.fontObject
+check(fo.members[1].file == "Fonts\\ARIALN.TTF" and fo.members[1].height == 14 and fo.members[1].flags == "THICKOUTLINE" and own.shadow[1] == 0, "style personnalisé appliqué")
+uf.name.text = "Autre Nom"
+if blizzardHooks.CompactUnitFrame_UpdateName then blizzardHooks.CompactUnitFrame_UpdateName(uf) end
+check(own.text == "Autre Nom", "texte suivi après une mise à jour de Blizzard")
 fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
-check(uf.healthBar.alpha == 1 and uf.border.alpha == 1 and uf.name.color[1] == 1, "barre recyclée : visibilité et couleur d'origine rendues")
-check(uf.name.fontObject == "ORIG_OBJ" and uf.friendlyBufferGuild.shown == false, "barre recyclée : police d'origine rendue, guilde masquée")
-check(#uf.name.points == 2 and uf.name.points[1][1] == "BOTTOMLEFT", "barre recyclée : ancrages d'origine rendus")
+check(uf.healthBar.alpha == 1 and uf.border.alpha == 1 and uf.name.alpha == 1, "barre recyclée : visibilité rendue")
+check(own.shown == false and uf.friendlyBufferGuild.shown == false, "barre recyclée : notre nom et la guilde masqués")
 fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
-check(uf.healthBar.alpha == 0 and uf.name.alpha ~= 0, "nouvelle barre alliée : barre masquée, nom visible")
+check(uf.healthBar.alpha == 0 and uf.name.alpha == 0 and own.shown, "nouvelle barre alliée : discrète à nouveau")
 ns.db.hiddenPlates = false
-ns.OnSettingsChanged()
-check(uf.healthBar.alpha == 1 and clickThrough == false, "option coupée : barres restaurées")
+ns.OnSettingsChanged()check(uf.healthBar.alpha == 1 and uf.name.alpha == 1 and own.shown == false and clickThrough == false, "option coupée : barres restaurées")
 
 -- Commandes
 printed = {}

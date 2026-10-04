@@ -1,13 +1,18 @@
 -- Option « barres de nom alliées discrètes » : les barres alliées restent actives (l'addon en a
--- besoin pour voir les inconnus) mais on n'en garde que le nom, comme sans Maj+V, et elles laissent
+-- besoin pour voir les inconnus) mais tout leur contenu est masqué, nom de Blizzard compris, et
+-- remplacé par notre propre texte « Nom » (+ « <Guilde> »), comme sans Maj+V. Elles laissent
 -- passer les clics.
+--
+-- Les éléments des barres de nom sont des régions « restreintes » : les mesurer (GetPoint,
+-- GetWidth…) déclenche une erreur de taint. On ne fait donc que les rendre transparents
+-- (SetAlpha) et lire le texte du nom ; tout le style s'applique à nos propres textes.
 local _, ns = ...
 
 local Nameplates = {}
 ns.Nameplates = Nameplates
 
 local MAX_NAMEPLATES = 40
--- UnitFrame -> { faded = éléments rendus transparents, unit, style = apparence d'origine du nom }
+-- UnitFrame -> { faded = { [élément] = true }, unit }
 local hidden = setmetatable({}, { __mode = "k" })
 
 local function unitFrame(unit)
@@ -15,27 +20,9 @@ local function unitFrame(unit)
     return plate and plate.UnitFrame
 end
 
--- Vrai si `object` est le nom ou contient le nom (on ne doit pas le masquer).
-local function holdsName(object, name)
-    local node = name
-    while node do
-        if node == object then return true end
-        node = node:GetParent()
-    end
-    return false
-end
-
-local function nameOf(frame) return frame.name or frame.Name end
-
--- Blizzard colore le nom des barres avec SetVertexColor : on utilise la même méthode.
-local function setNameColor(name, r, g, b)
-    if name.SetVertexColor then name:SetVertexColor(r, g, b) else name:SetTextColor(r, g, b) end
-end
-
-local function getNameColor(name)
-    if name.GetVertexColor then return name:GetVertexColor() end
-    return name:GetTextColor()
-end
+---------------------------------------------------------------------------
+-- Polices
+---------------------------------------------------------------------------
 
 -- Polices de secours par alphabet : une police latine seule affiche des carrés pour le chinois,
 -- le coréen ou le cyrillique. Tous les clients contiennent ces fichiers (cf. LibSharedMedia).
@@ -86,11 +73,29 @@ local function applyFont(fontString)
     end
 end
 
+---------------------------------------------------------------------------
+-- Texte affiché
+---------------------------------------------------------------------------
+
+-- Texte du nom : celui de Blizzard (lisible, contrairement à sa géométrie), sinon UnitName.
+local function nameText(frame, unit)
+    local blizzard = frame.name or frame.Name
+    if blizzard and blizzard.GetText then
+        -- pcall : si ce client restreint aussi la lecture du texte, on passe à UnitName.
+        local ok, text = pcall(blizzard.GetText, blizzard)
+        if ok and text and text ~= "" and not ns.Compat.IsSecret(text) then return text end
+    end
+    local name, surname = UnitName(unit)
+    if not name or ns.Compat.IsSecret(name) or ns.Compat.IsSecret(surname) then return nil end
+    if surname and surname ~= "" then return name .. " " .. surname end
+    return name
+end
+
 -- Couleur comme sans Maj+V : celle que le jeu utilise pour la sélection (bleu allié, vert JcJ…).
 local function selectionColor(unit)
-    if not UnitSelectionColor then return nil end
+    if not UnitSelectionColor then return 1, 1, 1 end
     local r, g, b = UnitSelectionColor(unit, true)
-    if r == nil or ns.Compat.IsSecret(r) then return nil end
+    if r == nil or ns.Compat.IsSecret(r) then return 1, 1, 1 end
     return r, g, b
 end
 
@@ -101,113 +106,93 @@ local function guildName(unit)
     return guild
 end
 
--- Ligne « <Guilde> » sous le nom, créée une fois par barre (les barres sont recyclées).
-local function guildLine(frame, name)
-    local line = frame.friendlyBufferGuild
-    if not line then
-        line = frame:CreateFontString(nil, "OVERLAY")
-        line:SetPoint("TOP", name, "BOTTOM", 0, -1)
-        frame.friendlyBufferGuild = line
+-- Nos textes, créés une fois par barre (les barres sont recyclées). Un seul point d'ancrage :
+-- la largeur suit le texte, le nom n'est jamais tronqué.
+local function ownTexts(frame)
+    if not frame.friendlyBufferName then
+        local name = frame:CreateFontString(nil, "OVERLAY")
+        name:SetPoint("CENTER", frame, "CENTER", 0, 0)
+        name:SetWordWrap(false)
+        local guild = frame:CreateFontString(nil, "OVERLAY")
+        guild:SetPoint("TOP", name, "BOTTOM", 0, -1)
+        guild:SetWordWrap(false)
+        frame.friendlyBufferName, frame.friendlyBufferGuild = name, guild
     end
-    return line
+    return frame.friendlyBufferName, frame.friendlyBufferGuild
 end
 
-local function restyle(frame, unit)
-    local name = nameOf(frame)
-    if not name then return end
-    applyFont(name)
-    -- Blizzard ancre le nom à gauche et à droite de la barre (largeur fixe) : avec une grande
-    -- police il serait tronqué (« ... »). Un seul point d'ancrage : la largeur suit le texte.
-    name:ClearAllPoints()
-    name:SetPoint("CENTER", frame, "CENTER", 0, 0)
-    name:SetWidth(0)
-    name:SetWordWrap(false)
+local function isOwn(frame, object)
+    return object == frame.friendlyBufferName or object == frame.friendlyBufferGuild
+end
+
+---------------------------------------------------------------------------
+-- Masquer / rendre
+---------------------------------------------------------------------------
+
+-- Rend transparent tout le contenu de la barre sauf nos textes. Refait à chaque passage :
+-- Blizzard peut réafficher un élément ou en créer un nouveau.
+local function fadeAll(frame, state)
+    local parts = { frame:GetRegions() }
+    for _, child in ipairs({ frame:GetChildren() }) do parts[#parts + 1] = child end
+    for _, object in ipairs(parts) do
+        if not isOwn(frame, object) then
+            object:SetAlpha(0)
+            state.faded[object] = true
+        end
+    end
+end
+
+local function keepOnlyName(frame, unit)
+    local text = nameText(frame, unit)
+    -- Nom illisible (valeur secrète) : on laisse la barre telle quelle plutôt que de tout masquer.
+    if not text then return end
+
+    local state = hidden[frame]
+    if not state then
+        state = { faded = {} }
+        hidden[frame] = state
+    end
+    state.unit = unit
+    fadeAll(frame, state)
+
+    local name, guildLine = ownTexts(frame)
     local r, g, b = selectionColor(unit)
-    if r then setNameColor(name, r, g, b) end
+    applyFont(name)
+    name:SetText(text)
+    name:SetTextColor(r, g, b)
+    name:Show()
+
     local guild = guildName(unit)
     if guild then
-        local line = guildLine(frame, name)
-        applyFont(line)
-        line:SetText("<" .. guild .. ">")
-        if r then line:SetTextColor(r, g, b) end
-        line:Show()
-    elseif frame.friendlyBufferGuild then
-        frame.friendlyBufferGuild:Hide()
+        applyFont(guildLine)
+        guildLine:SetText("<" .. guild .. ">")
+        guildLine:SetTextColor(r, g, b)
+        guildLine:Show()
+    else
+        guildLine:Hide()
     end
-end
-
--- Apparence d'origine du nom, pour la rendre quand la barre est recyclée ou l'option coupée.
-local function saveStyle(name)
-    local points = {}
-    for i = 1, name:GetNumPoints() do points[i] = { name:GetPoint(i) } end
-    return {
-        color = { getNameColor(name) },
-        fontObject = name.GetFontObject and name:GetFontObject() or nil,
-        font = { name:GetFont() },
-        shadowOffset = { name:GetShadowOffset() },
-        shadowColor = { name:GetShadowColor() },
-        points = points,
-    }
-end
-
-local function restoreStyle(name, style)
-    setNameColor(name, style.color[1], style.color[2], style.color[3])
-    if style.fontObject then
-        name:SetFontObject(style.fontObject)
-    elseif style.font[1] then
-        name:SetFont(style.font[1], style.font[2], style.font[3])
-    end
-    name:SetShadowOffset(style.shadowOffset[1] or 0, style.shadowOffset[2] or 0)
-    name:SetShadowColor(style.shadowColor[1] or 0, style.shadowColor[2] or 0, style.shadowColor[3] or 0, style.shadowColor[4] or 1)
-    name:ClearAllPoints()
-    for _, point in ipairs(style.points) do name:SetPoint(unpack(point)) end
-end
--- Masque tout ce qui compose la barre (barre de vie, bordure, icônes…) sauf le nom.
--- Si le nom est imbriqué dans un élément (ex. la barre de vie), on descend dans cet élément.
-local function keepOnlyName(frame, unit)
-    if hidden[frame] then
-        hidden[frame].unit = unit
-        restyle(frame, unit)
-        return
-    end
-    local name, faded = nameOf(frame), {}
-    local function fadeContents(container)
-        local parts = { container:GetRegions() }
-        if container.GetChildren then
-            for _, child in ipairs({ container:GetChildren() }) do parts[#parts + 1] = child end
-        end
-        for _, object in ipairs(parts) do
-            if object == frame.friendlyBufferGuild then
-                -- notre ligne de guilde : gérée à part
-            elseif not name or not holdsName(object, name) then
-                object:SetAlpha(0)
-                faded[#faded + 1] = object
-            elseif object ~= name then
-                fadeContents(object)
-            end
-        end
-    end
-    fadeContents(frame)
-    hidden[frame] = { faded = faded, unit = unit, style = name and saveStyle(name) }
-    restyle(frame, unit)
 end
 
 local function restore(frame)
     local state = frame and hidden[frame]
     if not state then return end
-    for _, object in ipairs(state.faded) do object:SetAlpha(1) end
-    if state.style then restoreStyle(nameOf(frame), state.style) end
+    for object in pairs(state.faded) do object:SetAlpha(1) end
+    if frame.friendlyBufferName then frame.friendlyBufferName:Hide() end
     if frame.friendlyBufferGuild then frame.friendlyBufferGuild:Hide() end
     hidden[frame] = nil
 end
 
--- Blizzard réécrit la couleur du nom à chaque mise à jour de la barre : on réapplique le style.
+-- Blizzard met à jour le nom (changement de nom, de cible…) : on suit le texte.
 if hooksecurefunc and CompactUnitFrame_UpdateName then
     hooksecurefunc("CompactUnitFrame_UpdateName", function(frame)
         local state = hidden[frame]
-        if state then restyle(frame, state.unit) end
+        if state then keepOnlyName(frame, state.unit) end
     end)
 end
+
+---------------------------------------------------------------------------
+-- API
+---------------------------------------------------------------------------
 
 -- Applique l'état voulu à la barre d'une unité (les barres sont recyclées entre alliés et ennemis).
 function Nameplates.Update(unit)
@@ -220,7 +205,7 @@ function Nameplates.Update(unit)
     end
 end
 
--- Réapplique le style à toutes les barres (guilde connue plus tard, options modifiées…).
+-- Réapplique l'état à toutes les barres (guilde connue plus tard, options modifiées…).
 function Nameplates.Refresh()
     for i = 1, MAX_NAMEPLATES do Nameplates.Update("nameplate" .. i) end
 end
