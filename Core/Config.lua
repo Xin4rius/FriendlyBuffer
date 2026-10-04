@@ -39,6 +39,7 @@ local DEFAULTS = {
     plateFontSize = 12,
     plateOutline = "none",
     plateShadow = true,
+    plateGuild = true,
     thresholdShort = 60,
     thresholdLong = 180,
 }

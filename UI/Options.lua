@@ -63,6 +63,44 @@ local function stepper(parent, text, key, x, y, step, min, max, format)
     refreshers[#refreshers + 1] = function() value:SetText(string.format(format, ns.db[key])) end
 end
 
+-- Liste déroulante (menu moderne, comme Leatrix Plus sur Forever) pour un choix parmi
+-- { {key, label}, ... } ; à défaut, un bouton qui fait défiler les valeurs.
+local function selector(parent, list, get, set, width)
+    if MenuUtil and MenuUtil.CreateRadioMenu then
+        local dropdown = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
+        dropdown:SetWidth(width)
+        local items = {}
+        for _, entry in ipairs(list) do items[#items + 1] = { entry.label, entry.key } end
+        MenuUtil.CreateRadioMenu(dropdown,
+            function(value) return get() == value end,
+            function(value) set(value); changed() end,
+            unpack(items))
+        refreshers[#refreshers + 1] = function()
+            if dropdown.GenerateMenu then dropdown:GenerateMenu() end
+        end
+        return dropdown
+    end
+    local button = smallButton(parent, "", width, function()
+        for i, entry in ipairs(list) do
+            if entry.key == get() then
+                set(list[i % #list + 1].key)
+                break
+            end
+        end
+        changed()
+    end)
+    refreshers[#refreshers + 1] = function() button:SetText(ns.Config.Find(list, get()).label) end
+    return button
+end
+
+-- Libellé + liste déroulante liée à un réglage.
+local function choice(parent, text, key, list, x, y)
+    label(parent, text):SetPoint("TOPLEFT", x, y)
+    local widget = selector(parent, list,
+        function() return ns.db[key] end,
+        function(value) ns.db[key] = value end, 180)
+    widget:SetPoint("TOPLEFT", x + 230, y + 5)
+end
 local function familyLabel(key)
     local fam = ns.classData.families[key]
     local name, icon = ns.Compat.GetSpellInfo(fam.ranks[1].id)
@@ -81,24 +119,23 @@ local function buildPriorities(parent, y)
     end
 
     local classes = ns.TARGET_CLASSES
-    local classText = label(parent, "", "GameFontNormal")
-    local prev = smallButton(parent, "<", 24, function()
-        selectedClass = (selectedClass - 2) % #classes + 1
-        changed()
-    end)
-    prev:SetPoint("TOPLEFT", 16, y - 28)
-    classText:SetPoint("LEFT", prev, "RIGHT", 8, 0)
-    classText:SetWidth(120)
-    local nextButton = smallButton(parent, ">", 24, function()
-        selectedClass = selectedClass % #classes + 1
-        changed()
-    end)
-    nextButton:SetPoint("LEFT", classText, "RIGHT", 8, 0)
+    local classList = {}
+    for _, cls in ipairs(classes) do
+        classList[#classList + 1] = { key = cls, label = (LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[cls]) or cls }
+    end
+    local classSelector = selector(parent, classList,
+        function() return classes[selectedClass] end,
+        function(value)
+            for i, cls in ipairs(classes) do
+                if cls == value then selectedClass = i end
+            end
+        end, 180)
+    classSelector:SetPoint("TOPLEFT", 16, y - 26)
     local reset = smallButton(parent, "Réinitialiser", 110, function()
         ns.Config.ResetPriorities(ns.db, ns.classData, classes[selectedClass])
         changed()
     end)
-    reset:SetPoint("LEFT", nextButton, "RIGHT", 16, 0)
+    reset:SetPoint("LEFT", classSelector, "RIGHT", 16, 0)
 
     local rows = {}
     for i = 1, MAX_ENTRIES do
@@ -133,9 +170,6 @@ local function buildPriorities(parent, y)
 
     refreshers[#refreshers + 1] = function()
         local cls = classes[selectedClass]
-        local r, g, b = ns.Compat.ClassColor(cls)
-        classText:SetText((LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[cls]) or cls)
-        classText:SetTextColor(r, g, b)
         local list = ns.db.priorities[cls]
         for i, row in ipairs(rows) do
             local entry = list[i]
@@ -152,24 +186,7 @@ local function buildPriorities(parent, y)
     end
 end
 
--- Bouton qui fait défiler les valeurs d'une liste { {key, label}, ... }.
-local function cycle(parent, text, key, list, x, y)
-    local fs = label(parent, text)
-    fs:SetPoint("TOPLEFT", x, y)
-    local button = smallButton(parent, "", 160, function()
-        for i, entry in ipairs(list) do
-            if entry.key == ns.db[key] then
-                ns.db[key] = list[i % #list + 1].key
-                break
-            end
-        end
-        changed()
-    end)
-    button:SetPoint("TOPLEFT", x + 230, y + 3)
-    refreshers[#refreshers + 1] = function() button:SetText(ns.Config.Find(list, ns.db[key]).label) end
-end
-
-local CONTENT_WIDTH, CONTENT_HEIGHT = 640, 760
+local CONTENT_WIDTH, CONTENT_HEIGHT = 640, 800
 
 function Options.Create()
     panel = CreateFrame("Frame")
@@ -203,7 +220,7 @@ function Options.Create()
 
     local modes = {}
     for _, mode in ipairs(ns.Config.DISPLAY_MODES) do modes[#modes + 1] = { key = mode, label = DISPLAY_LABELS[mode] } end
-    cycle(content, "Mode d'affichage", "displayMode", modes, 20, -226)
+    choice(content, "Mode d'affichage", "displayMode", modes, 20, -226)
 
     stepper(content, "Nombre de lignes maximum", "maxRows", 20, -256, 1, 1, 20, "%d")
     stepper(content, "Expire bientôt (buffs de 5/10 min)", "thresholdShort", 20, -282, 15, 15, 300, "%d s")
@@ -211,12 +228,13 @@ function Options.Create()
 
     local namesHeader = label(content, "Noms des barres de nom discrètes", "GameFontNormalLarge")
     namesHeader:SetPoint("TOPLEFT", 16, -348)
-    cycle(content, "Police", "plateFont", ns.Config.PLATE_FONTS, 20, -378)
-    cycle(content, "Contour", "plateOutline", ns.Config.PLATE_OUTLINES, 20, -404)
-    stepper(content, "Taille", "plateFontSize", 20, -430, 1, 8, 24, "%d")
-    checkbox(content, "Ombre", "plateShadow", 16, -452)
+    choice(content, "Police", "plateFont", ns.Config.PLATE_FONTS, 20, -378)
+    choice(content, "Contour", "plateOutline", ns.Config.PLATE_OUTLINES, 20, -408)
+    stepper(content, "Taille", "plateFontSize", 20, -436, 1, 8, 24, "%d")
+    checkbox(content, "Ombre", "plateShadow", 16, -458)
+    checkbox(content, "Afficher la guilde sous le nom", "plateGuild", 16, -484)
 
-    buildPriorities(content, -500)
+    buildPriorities(content, -530)
 
     panel:SetScript("OnShow", function()
         for _, refresh in ipairs(refreshers) do refresh() end

@@ -38,6 +38,8 @@ function methods:GetFont() local f = rawget(self, "font") or { "Fonts\\ORIG.TTF"
 function methods:SetShadowOffset(x, y) self.shadow = { x, y } end
 function methods:GetShadowOffset() local s = rawget(self, "shadow") or { 0, 0 }; return s[1], s[2] end
 function methods:GetShadowColor() return 0, 0, 0, 1 end
+function methods:SetFontObject(o) self.fontObject = o end
+function methods:GetFontObject() return rawget(self, "fontObject") or "ORIG_OBJ" end
 methods.SetVertexColor = methods.SetTextColor
 methods.GetVertexColor = methods.GetTextColor
 function methods:GetChildren() return unpack(rawget(self, "children") or {}) end
@@ -85,6 +87,13 @@ _G.UnitIsPVP = function() return false end
 _G.UnitCanAttack = function() return false end
 _G.IsAltKeyDown = function() return false end
 _G.UnitSelectionColor = function() return 0, 0, 1 end
+_G.MenuUtil = {
+    CreateRadioMenu = function(dropdown, isSelected, setSelected, ...)
+        dropdown.radio = { isSelected = isSelected, setSelected = setSelected, items = { ... } }
+    end,
+}
+_G.CreateFontFamily = function(name, members) return { name = name, members = members } end
+_G.GetGuildInfo = function(u) if u == "nameplate1" then return "Les Gardiens" end end
 local blizzardHooks = {}
 _G.hooksecurefunc = function(name, fn) blizzardHooks[name] = fn end
 _G.CompactUnitFrame_UpdateName = function(f) f.name:SetVertexColor(1, 1, 1) end
@@ -208,9 +217,20 @@ for _ = 1, 2 do
         if o.scripts.OnClick and not o.frameName:match("^FriendlyBufferRow") then o.scripts.OnClick(o, "LeftButton") end
     end
 end
-check(ns.db.displayMode == "minimal", "mode d'affichage : minimaliste <-> informatif")
-check(ns.db.plateFont == "skurri" and ns.db.plateOutline == "thick", "options : police et contour défilent")
-ns.db.plateFont, ns.db.plateFontSize, ns.db.plateOutline, ns.db.plateShadow = "friz", 12, "none", true
+-- Listes déroulantes : on choisit la dernière valeur de chacune
+local dropdowns = 0
+for _, o in ipairs(created) do
+    local radio = rawget(o, "radio")
+    if radio then
+        dropdowns = dropdowns + 1
+        local last = radio.items[#radio.items][2]
+        radio.setSelected(last)
+        check(radio.isSelected(last), "liste déroulante : valeur choisie sélectionnée")
+    end
+end
+check(dropdowns == 4, "4 listes déroulantes (affichage, police, contour, classe)")
+check(ns.db.displayMode == "info" and ns.db.plateFont == "morpheus" and ns.db.plateOutline == "thick", "options : choix appliqués")
+ns.db.plateFont, ns.db.plateFontSize, ns.db.plateOutline, ns.db.plateShadow, ns.db.plateGuild = "friz", 12, "none", true, true
 for i = 1, 4 do if row(i).scripts.OnEnter then row(i).scripts.OnEnter(row(i)) end end
 
 -- Barres de nom invisibles
@@ -223,15 +243,19 @@ ns.OnSettingsChanged()
 check(cvars.nameplateShowFriends == "1" and clickThrough == true, "barres invisibles : CVar + clic traversant")
 check(uf.healthBar.alpha == 0 and uf.border.alpha == 0 and uf.name.alpha ~= 0 and uf.alpha ~= 0, "barres invisibles : barre masquée, nom visible")
 check(uf.name.color and uf.name.color[3] == 1 and uf.name.color[1] == 0, "nom coloré comme sans Maj+V (UnitSelectionColor)")
-check(uf.name.font[1] == "Fonts\\FRIZQT__.TTF" and uf.name.font[2] == 12 and uf.name.font[3] == "" and uf.name.shadow[1] == 1, "style par défaut : Friz 12, sans contour, ombre")
+local fo = uf.name.fontObject
+check(type(fo) == "table" and fo.members[1].file == "Fonts\\FRIZQT__.TTF" and fo.members[1].height == 12 and fo.members[1].flags == "" and uf.name.shadow[1] == 1, "style par défaut : Friz 12, sans contour, ombre")
+check(type(fo) == "table" and fo.members[4].alphabet == "simplifiedchinese" and fo.members[4].file == "Fonts\\ARKai_T.ttf", "police de secours pour le chinois")
+check(uf.friendlyBufferGuild and uf.friendlyBufferGuild.text == "<Les Gardiens>" and uf.friendlyBufferGuild.shown, "guilde affichée sous le nom")
 ns.db.plateOutline, ns.db.plateFontSize, ns.db.plateShadow, ns.db.plateFont = "thick", 14, false, "arial"
 ns.OnSettingsChanged()
-check(uf.name.font[1] == "Fonts\\ARIALN.TTF" and uf.name.font[2] == 14 and uf.name.font[3] == "THICKOUTLINE" and uf.name.shadow[1] == 0, "style personnalisé appliqué")
+fo = uf.name.fontObject
+check(fo.members[1].file == "Fonts\\ARIALN.TTF" and fo.members[1].height == 14 and fo.members[1].flags == "THICKOUTLINE" and uf.name.shadow[1] == 0, "style personnalisé appliqué")
 CompactUnitFrame_UpdateName(uf); if blizzardHooks.CompactUnitFrame_UpdateName then blizzardHooks.CompactUnitFrame_UpdateName(uf) end
 check(uf.name.color[1] == 0, "couleur réappliquée après une mise à jour de Blizzard")
 fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
 check(uf.healthBar.alpha == 1 and uf.border.alpha == 1 and uf.name.color[1] == 1, "barre recyclée : visibilité et couleur d'origine rendues")
-check(uf.name.font[1] == "Fonts\\ORIG.TTF" and uf.name.font[3] == "OUTLINE", "barre recyclée : police d'origine rendue")
+check(uf.name.fontObject == "ORIG_OBJ" and uf.friendlyBufferGuild.shown == false, "barre recyclée : police d'origine rendue, guilde masquée")
 fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
 check(uf.healthBar.alpha == 0 and uf.name.alpha ~= 0, "nouvelle barre alliée : barre masquée, nom visible")
 ns.db.hiddenPlates = false

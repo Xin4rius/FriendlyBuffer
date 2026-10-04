@@ -123,6 +123,7 @@ local dirty, sinceScan, sinceTick = true, 0, 0
 local function scan()
     dirty, sinceScan, sinceTick = false, 0, 0
     ns.MainFrame.Render(buildRows())
+    if ns.db.hiddenPlates then ns.Nameplates.Refresh() end
 end
 
 function ns.RequestScan() dirty = true end
