@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: FriendlyBuffer
+## Notes: Liste les joueurs proches à buffer ; un clic sur le nom lance le bon buff.
+## Author: Xin4rius
+## Version: 1.0.0
+## SavedVariablesPerCharacter: FriendlyBufferCharDB
+
+Data\Spells.lua
+Core\Compat.lua
+Core\Config.lua
+Core\Auras.lua
+Core\Decision.lua
+Core\Scanner.lua
+UI\MainFrame.lua
+UI\Options.lua
+FriendlyBuffer.lua
