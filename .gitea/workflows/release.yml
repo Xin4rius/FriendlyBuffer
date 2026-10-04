@@ -1,0 +1,64 @@
+# Tests à chaque push ; publication sur CurseForge quand un tag de version est poussé.
+#
+# À configurer une fois dans Gitea (Paramètres du dépôt) :
+#   - Actions > Secrets   : CF_API_TOKEN           (jeton API CurseForge)
+#   - Actions > Variables : CURSEFORGE_PROJECT_ID  (ID numérique du projet CurseForge)
+#
+# Publier :  git tag -a v1.2.0 -m "v1.2.0"  puis  git push origin v1.2.0
+# Un tag contenant « beta » ou « alpha » (ex. v1.2.0-beta1) est publié comme bêta / alpha.
+name: CI / Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['*']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Lua 5.1
+        run: |
+          SUDO=$(command -v sudo || true)
+          $SUDO apt-get update -qq
+          $SUDO apt-get install -y -qq lua5.1
+
+      - name: Unit tests
+        run: lua5.1 tests/run.lua
+
+      - name: Smoke test (mocked WoW API)
+        run: lua5.1 tests/smoke.lua
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check configuration
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+        run: |
+          [ -n "$CF_API_TOKEN" ] || { echo "::error::Secret CF_API_TOKEN manquant"; exit 1; }
+          [ -n "$PROJECT_ID" ] || { echo "::error::Variable CURSEFORGE_PROJECT_ID manquante"; exit 1; }
+
+      # Historique complet : le packager lit les tags pour la version et génère le changelog.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install packager dependencies
+        run: |
+          SUDO=$(command -v sudo || true)
+          $SUDO apt-get update -qq
+          $SUDO apt-get install -y -qq jq zip unzip subversion
+
+      - name: Package and upload to CurseForge
+        uses: BigWigsMods/packager@v2
+        with:
+          args: -p ${{ vars.CURSEFORGE_PROJECT_ID }}
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}

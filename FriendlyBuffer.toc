@@ -13,7 +13,7 @@
 ## Notes-zhTW: 列出附近需要你的增益的玩家；點擊名字即可施放合適的增益。
 ## IconTexture: Interface\AddOns\FriendlyBuffer\Media\icon
 ## Author: Xin4rius
-## Version: 1.1.0
+## Version: @project-version@
 ## SavedVariablesPerCharacter: FriendlyBufferCharDB
 
 Locales\Locale.lua
