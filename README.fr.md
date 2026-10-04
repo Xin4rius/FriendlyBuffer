@@ -84,8 +84,9 @@ lua tests/smoke.lua
 ## Publier une version
 
 Le workflow Gitea Actions (`.gitea/workflows/release.yml`) lance les tests à chaque push. Pousser
-un tag de version empaquette l'addon avec le packager BigWigsMods et l'envoie sur CurseForge
-(changelog généré depuis les commits, `@project-version@` remplacé par le tag) :
+un tag de version construit le zip de l'addon (`.pkgmeta`, `@project-version@` remplacé par le tag)
+et crée une release avec le zip et la liste des commits depuis le tag précédent. CurseForge
+récupère la nouvelle version depuis le miroir GitHub.
 
 ```bash
 git tag -a v1.2.0 -m "v1.2.0"
@@ -95,6 +96,5 @@ git tag -a v1.2.0 -m "v1.2.0"
 git push origin v1.2.0
 ```
 
-Un tag contenant `beta` ou `alpha` est publié en bêta / alpha. À configurer une fois dans les
-paramètres du dépôt : le secret `CF_API_TOKEN` (jeton API CurseForge) et la variable
-`CURSEFORGE_PROJECT_ID`.
+Un tag contenant `beta` ou `alpha` donne une pré-version. Pour créer la release d'un tag déjà
+poussé : Actions → CI / Release → Run workflow, avec le tag.
