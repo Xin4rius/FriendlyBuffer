@@ -45,15 +45,26 @@ local function checkbox(parent, text, key, x, y)
     return cb
 end
 
--- Valeur numérique avec boutons - / +.
-local function stepper(parent, text, key, x, y, step, min, max, format)
+-- Colonne des commandes (boutons -/+, listes déroulantes) : les libellés, plus longs dans
+-- certaines langues, sont limités à la largeur qui la précède.
+local CONTROL_OFFSET = 310
+
+local function settingLabel(parent, text, x, y)
     local fs = label(parent, text)
     fs:SetPoint("TOPLEFT", x, y)
+    fs:SetWidth(CONTROL_OFFSET - 10)
+    fs:SetJustifyH("LEFT")
+    return fs
+end
+
+-- Valeur numérique avec boutons - / +.
+local function stepper(parent, text, key, x, y, step, min, max, format)
+    settingLabel(parent, text, x, y)
     local minus = smallButton(parent, "-", 24, function()
         ns.db[key] = math.max(min, ns.db[key] - step)
         changed()
     end)
-    minus:SetPoint("TOPLEFT", x + 230, y + 3)
+    minus:SetPoint("TOPLEFT", x + CONTROL_OFFSET, y + 3)
     local value = label(parent, "")
     value:SetPoint("LEFT", minus, "RIGHT", 6, 0)
     value:SetWidth(50)
@@ -97,12 +108,13 @@ end
 
 -- Libellé + liste déroulante liée à un réglage.
 local function choice(parent, text, key, list, x, y)
-    label(parent, text):SetPoint("TOPLEFT", x, y)
+    settingLabel(parent, text, x, y)
     local widget = selector(parent, list,
         function() return ns.db[key] end,
         function(value) ns.db[key] = value end, 180)
-    widget:SetPoint("TOPLEFT", x + 230, y + 5)
+    widget:SetPoint("TOPLEFT", x + CONTROL_OFFSET, y + 5)
 end
+
 local function familyLabel(key)
     local fam = ns.classData.families[key]
     local name, icon = ns.Compat.GetSpellInfo(fam.ranks[1].id)
