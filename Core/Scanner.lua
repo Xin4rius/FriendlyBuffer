@@ -42,9 +42,12 @@ local function isCandidate(unit, isGroup)
     return true
 end
 
+-- Sur Forever, le second retour de UnitName est le nom de famille : « Prénom Nom »,
+-- exactement la forme attendue par /targetexact. nil si le nom est secret.
 local function fullName(unit)
-    local name, realm = UnitName(unit)
-    if realm and realm ~= "" then return name .. "-" .. realm end
+    local name, surname = UnitName(unit)
+    if not name or ns.Compat.IsSecret(name) or ns.Compat.IsSecret(surname) then return nil end
+    if surname and surname ~= "" then return name .. " " .. surname end
     return name
 end
 
@@ -60,10 +63,15 @@ function Scanner.Collect(includeStrangers)
         end
         local guid = UnitGUID(unit)
         if not guid or seen[guid] then return end
+        local name = fullName(unit)
+        if not name then
+            rejected["nom secret"] = (rejected["nom secret"] or 0) + 1
+            return
+        end
         seen[guid] = true
         local _, class = UnitClass(unit)
         result[#result + 1] = {
-            unit = unit, guid = guid, name = fullName(unit), class = class,
+            unit = unit, guid = guid, name = name, class = class,
             level = UnitLevel(unit), isGroup = isGroup,
         }
     end

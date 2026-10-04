@@ -9,8 +9,16 @@ local function say(msg) print(PREFIX .. msg) end
 ns.Print = say
 
 ---------------------------------------------------------------------------
--- Sorts : libellés
+-- Sorts : libellés et texte de /cast
 ---------------------------------------------------------------------------
+
+-- "Nom(Rang N)" pour les macros ; le nom seul si le client ne donne pas de rang.
+function ns.CastString(rank)
+    local name = ns.Compat.GetSpellInfo(rank.id) or ""
+    local sub = ns.Compat.GetSpellSubtext(rank.id)
+    if sub and sub ~= "" then return name .. "(" .. sub .. ")" end
+    return name
+end
 
 function ns.SpellLabel(rank)
     local name = ns.Compat.GetSpellInfo(rank.id) or ("#" .. rank.id)
@@ -227,10 +235,6 @@ events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function(_, event, unit)
     if event == "PLAYER_LOGIN" then
         onLogin()
-    elseif event == "PLAYER_REGEN_DISABLED" then
-        -- Encore hors verrouillage : dernier moment pour modifier les boutons sécurisés.
-        ns.MainFrame.OnCombatStart()
-        ns.RequestScan()
     elseif event == "PLAYER_REGEN_ENABLED" then
         ns.Nameplates.Apply()
         scan()

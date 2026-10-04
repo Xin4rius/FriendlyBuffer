@@ -25,9 +25,9 @@ inférieur** à ce que vous pouvez lui poser (en tenant compte de son niveau).
 
 Joueurs hors groupe : WoW ne les rend visibles aux addons qu'à travers les **barres de nom
 alliées** (ou votre cible). Activez-les (Maj+V), ou cochez l'option « barres de nom alliées
-invisibles » : l'addon les active mais les rend transparentes et non cliquables. Le buff est lancé
-directement sur le joueur, sans changer votre cible ; les lignes hors groupe sont désactivées en
-combat. Les inconnus marqués JcJ sont ignorés si vous ne l'êtes pas.
+invisibles » : l'addon les active mais les rend transparentes et non cliquables. Le clic sur un
+membre du groupe lance le buff sans changer votre cible ; pour un inconnu, l'addon le cible par
+« Prénom Nom », lance le buff puis rétablit votre cible (si le ciblage échoue, rien n'est lancé). Les inconnus marqués JcJ sont ignorés si vous ne l'êtes pas.
 
 En combat, la liste est figée (restriction de WoW sur les boutons de sort) mais reste
 cliquable ; elle est reconstruite à la sortie du combat. Elle ne se réordonne pas non plus

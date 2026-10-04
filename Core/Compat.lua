@@ -101,6 +101,11 @@ function Compat.SetFriendlyClickThrough(enabled)
     end
 end
 
+-- Client « Midnight » : certaines valeurs sont secrètes et inutilisables par les addons.
+function Compat.IsSecret(value)
+    return issecretvalue ~= nil and issecretvalue(value) or false
+end
+
 function Compat.ClassColor(class)
     local c = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[class]
     if c then return c.r, c.g, c.b end
