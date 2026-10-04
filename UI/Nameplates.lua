@@ -7,7 +7,8 @@ local Nameplates = {}
 ns.Nameplates = Nameplates
 
 local MAX_NAMEPLATES = 40
-local hidden = setmetatable({}, { __mode = "k" }) -- UnitFrame -> éléments rendus transparents
+-- UnitFrame -> { faded = éléments rendus transparents, unit, color = couleur d'origine du nom }
+local hidden = setmetatable({}, { __mode = "k" })
 
 local function unitFrame(unit)
     local plate = ns.Compat.GetNamePlateForUnit(unit)
@@ -24,11 +25,37 @@ local function holdsName(object, name)
     return false
 end
 
+local function nameOf(frame) return frame.name or frame.Name end
+
+-- Blizzard colore le nom des barres avec SetVertexColor : on utilise la même méthode.
+local function setNameColor(name, r, g, b)
+    if name.SetVertexColor then name:SetVertexColor(r, g, b) else name:SetTextColor(r, g, b) end
+end
+
+local function getNameColor(name)
+    if name.GetVertexColor then return name:GetVertexColor() end
+    return name:GetTextColor()
+end
+
+-- Couleur du nom comme sans Maj+V : celle que le jeu utilise pour la sélection
+-- (bleu allié, vert allié JcJ, etc.).
+local function recolor(frame, unit)
+    local name = nameOf(frame)
+    if not name or not UnitSelectionColor then return end
+    local r, g, b = UnitSelectionColor(unit, true)
+    if r == nil or ns.Compat.IsSecret(r) then return end
+    setNameColor(name, r, g, b)
+end
+
 -- Masque tout ce qui compose la barre (barre de vie, bordure, icônes…) sauf le nom.
 -- Si le nom est imbriqué dans un élément (ex. la barre de vie), on descend dans cet élément.
-local function keepOnlyName(frame)
-    if hidden[frame] then return end
-    local name, faded = frame.name or frame.Name, {}
+local function keepOnlyName(frame, unit)
+    if hidden[frame] then
+        hidden[frame].unit = unit
+        recolor(frame, unit)
+        return
+    end
+    local name, faded = nameOf(frame), {}
     local function fadeContents(container)
         local parts = { container:GetRegions() }
         if container.GetChildren then
@@ -44,13 +71,25 @@ local function keepOnlyName(frame)
         end
     end
     fadeContents(frame)
-    hidden[frame] = faded
+    local color = name and { getNameColor(name) }
+    hidden[frame] = { faded = faded, unit = unit, color = color }
+    recolor(frame, unit)
 end
 
 local function restore(frame)
-    if not frame or not hidden[frame] then return end
-    for _, object in ipairs(hidden[frame]) do object:SetAlpha(1) end
+    local state = frame and hidden[frame]
+    if not state then return end
+    for _, object in ipairs(state.faded) do object:SetAlpha(1) end
+    if state.color then setNameColor(nameOf(frame), state.color[1], state.color[2], state.color[3]) end
     hidden[frame] = nil
+end
+
+-- Blizzard réécrit la couleur du nom à chaque mise à jour de la barre : on la réapplique.
+if hooksecurefunc and CompactUnitFrame_UpdateName then
+    hooksecurefunc("CompactUnitFrame_UpdateName", function(frame)
+        local state = hidden[frame]
+        if state then recolor(frame, state.unit) end
+    end)
 end
 
 -- Applique l'état voulu à la barre d'une unité (les barres sont recyclées entre alliés et ennemis).
@@ -58,7 +97,7 @@ function Nameplates.Update(unit)
     local frame = unitFrame(unit)
     if not frame then return end
     if ns.db.hiddenPlates and UnitExists(unit) and not UnitCanAttack("player", unit) then
-        keepOnlyName(frame)
+        keepOnlyName(frame, unit)
     else
         restore(frame)
     end

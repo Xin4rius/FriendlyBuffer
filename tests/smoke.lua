@@ -31,6 +31,10 @@ function methods:GetPoint() return "CENTER", nil, "CENTER", 10, 20 end
 function methods:RegisterEvent(e) self.events[e] = true end
 function methods:GetID() return 42 end
 function methods:SetAlpha(a) self.alpha = a end
+function methods:SetTextColor(r, g, b) self.color = { r, g, b } end
+function methods:GetTextColor() local c = rawget(self, "color") or { 1, 1, 1 }; return c[1], c[2], c[3] end
+methods.SetVertexColor = methods.SetTextColor
+methods.GetVertexColor = methods.GetTextColor
 function methods:GetChildren() return unpack(rawget(self, "children") or {}) end
 function methods:GetRegions() return unpack(rawget(self, "regions") or {}) end
 function methods:GetParent() return rawget(self, "parent") end
@@ -75,6 +79,10 @@ _G.UnitIsUnit = function(a, b) return a == b end
 _G.UnitIsPVP = function() return false end
 _G.UnitCanAttack = function() return false end
 _G.IsAltKeyDown = function() return false end
+_G.UnitSelectionColor = function() return 0, 0, 1 end
+local blizzardHooks = {}
+_G.hooksecurefunc = function(name, fn) blizzardHooks[name] = fn end
+_G.CompactUnitFrame_UpdateName = function(f) f.name:SetVertexColor(1, 1, 1) end
 _G.UnitName = function(u) if U(u) then return U(u).name, U(u).surname end end
 _G.UnitGUID = function(u) return U(u) and U(u).guid end
 _G.UnitLevel = function(u) return U(u) and U(u).level end
@@ -207,8 +215,11 @@ ns.db.hiddenPlates = true
 ns.OnSettingsChanged()
 check(cvars.nameplateShowFriends == "1" and clickThrough == true, "barres invisibles : CVar + clic traversant")
 check(uf.healthBar.alpha == 0 and uf.border.alpha == 0 and uf.name.alpha ~= 0 and uf.alpha ~= 0, "barres invisibles : barre masquée, nom visible")
+check(uf.name.color and uf.name.color[3] == 1 and uf.name.color[1] == 0, "nom coloré comme sans Maj+V (UnitSelectionColor)")
+CompactUnitFrame_UpdateName(uf); if blizzardHooks.CompactUnitFrame_UpdateName then blizzardHooks.CompactUnitFrame_UpdateName(uf) end
+check(uf.name.color[1] == 0, "couleur réappliquée après une mise à jour de Blizzard")
 fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
-check(uf.healthBar.alpha == 1 and uf.border.alpha == 1, "barre recyclée : visibilité rendue")
+check(uf.healthBar.alpha == 1 and uf.border.alpha == 1 and uf.name.color[1] == 1, "barre recyclée : visibilité et couleur d'origine rendues")
 fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
 check(uf.healthBar.alpha == 0 and uf.name.alpha ~= 0, "nouvelle barre alliée : barre masquée, nom visible")
 ns.db.hiddenPlates = false
