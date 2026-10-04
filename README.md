@@ -23,9 +23,11 @@ inférieur** à ce que vous pouvez lui poser (en tenant compte de son niveau).
 - `/fb plaques` : active / désactive les barres de nom alliées (aussi Maj+V)
 - `/fb reset` : replace la fenêtre au centre
 
-Joueurs hors groupe : activez les **barres de nom alliées** pour qu'ils soient détectés. Le clic
-les cible par leur nom, lance le buff, puis revient à votre cible précédente. Les inconnus
-marqués JcJ sont ignorés si vous ne l'êtes pas.
+Joueurs hors groupe : WoW ne les rend visibles aux addons qu'à travers les **barres de nom
+alliées** (ou votre cible). Activez-les (Maj+V), ou cochez l'option « barres de nom alliées
+invisibles » : l'addon les active mais les rend transparentes et non cliquables. Le buff est lancé
+directement sur le joueur, sans changer votre cible ; les lignes hors groupe sont désactivées en
+combat. Les inconnus marqués JcJ sont ignorés si vous ne l'êtes pas.
 
 En combat, la liste est figée (restriction de WoW sur les boutons de sort) mais reste
 cliquable ; elle est reconstruite à la sortie du combat. Elle ne se réordonne pas non plus

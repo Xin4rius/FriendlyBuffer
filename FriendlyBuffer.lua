@@ -9,16 +9,8 @@ local function say(msg) print(PREFIX .. msg) end
 ns.Print = say
 
 ---------------------------------------------------------------------------
--- Sorts : libellés et texte de /cast
+-- Sorts : libellés
 ---------------------------------------------------------------------------
-
--- "Nom(Rang N)" pour les macros ; le nom seul si le client ne donne pas de rang.
-function ns.CastString(rank)
-    local name = ns.Compat.GetSpellInfo(rank.id) or ""
-    local sub = ns.Compat.GetSpellSubtext(rank.id)
-    if sub and sub ~= "" then return name .. "(" .. sub .. ")" end
-    return name
-end
 
 function ns.SpellLabel(rank)
     local name = ns.Compat.GetSpellInfo(rank.id) or ("#" .. rank.id)
@@ -91,7 +83,10 @@ end
 
 function ns.RequestScan() dirty = true end
 
-function ns.OnSettingsChanged() scan() end
+function ns.OnSettingsChanged()
+    ns.Nameplates.Apply()
+    scan()
+end
 
 ---------------------------------------------------------------------------
 -- Commandes
@@ -100,7 +95,9 @@ function ns.OnSettingsChanged() scan() end
 local NAMEPLATE_HINT = "les joueurs hors groupe ne sont détectés que via les barres de nom alliées, actuellement désactivées : touche Maj+V ou /fb plaques."
 
 local function warnNameplates()
-    if ns.db.includeStrangers and not ns.Compat.FriendlyNameplatesShown() then say(NAMEPLATE_HINT) end
+    if ns.db.includeStrangers and not ns.db.hiddenPlates and not ns.Compat.FriendlyNameplatesShown() then
+        say(NAMEPLATE_HINT)
+    end
 end
 
 local function toggleNameplates()
@@ -194,8 +191,8 @@ local events = CreateFrame("Frame")
 
 local SCAN_EVENTS = {
     "UNIT_AURA", "GROUP_ROSTER_UPDATE", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
-    "PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT", "UNIT_LEVEL", "SPELLS_CHANGED",
-    "PLAYER_ENTERING_WORLD", "UNIT_FLAGS", "PLAYER_REGEN_DISABLED",
+    "PLAYER_TARGET_CHANGED", "UNIT_LEVEL", "SPELLS_CHANGED", "PLAYER_ENTERING_WORLD", "UNIT_FLAGS",
+    "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED",
 }
 
 local function onLogin()
@@ -214,10 +211,10 @@ local function onLogin()
         return
     end
     say("chargé (" .. (UnitClass("player")) .. "). /fb options pour les réglages, /fb debug en cas de souci.")
+    ns.Nameplates.Apply()
     warnNameplates()
 
     for _, event in ipairs(SCAN_EVENTS) do events:RegisterEvent(event) end
-    events:RegisterEvent("PLAYER_REGEN_ENABLED")
     events:SetScript("OnUpdate", function(_, elapsed)
         sinceScan = sinceScan + elapsed
         sinceTick = sinceTick + elapsed
@@ -227,12 +224,23 @@ local function onLogin()
 end
 
 events:RegisterEvent("PLAYER_LOGIN")
-events:SetScript("OnEvent", function(_, event)
+events:SetScript("OnEvent", function(_, event, unit)
     if event == "PLAYER_LOGIN" then
         onLogin()
+    elseif event == "PLAYER_REGEN_DISABLED" then
+        -- Encore hors verrouillage : dernier moment pour modifier les boutons sécurisés.
+        ns.MainFrame.OnCombatStart()
+        ns.RequestScan()
     elseif event == "PLAYER_REGEN_ENABLED" then
+        ns.Nameplates.Apply()
         scan()
         ns.MainFrame.Flush()
+    elseif event == "NAME_PLATE_UNIT_ADDED" then
+        ns.Nameplates.Update(unit)
+        ns.RequestScan()
+    elseif event == "NAME_PLATE_UNIT_REMOVED" then
+        ns.Nameplates.Removed(unit)
+        ns.RequestScan()
     else
         ns.RequestScan()
     end

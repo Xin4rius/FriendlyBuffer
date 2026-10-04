@@ -30,6 +30,7 @@ function methods:IsMouseOver() return false end
 function methods:GetPoint() return "CENTER", nil, "CENTER", 10, 20 end
 function methods:RegisterEvent(e) self.events[e] = true end
 function methods:GetID() return 42 end
+function methods:SetAlpha(a) self.alpha = a end
 
 -- Monde simulé ---------------------------------------------------------------
 local inCombat = false
@@ -68,6 +69,7 @@ _G.UnitInParty = function(u) return U(u) ~= nil and not U(u).stranger end
 _G.UnitInRaid = function() return nil end
 _G.UnitIsUnit = function(a, b) return a == b end
 _G.UnitIsPVP = function() return false end
+_G.UnitCanAttack = function() return false end
 _G.UnitName = function(u) return U(u) and U(u).name end
 _G.UnitGUID = function(u) return U(u) and U(u).guid end
 _G.UnitLevel = function(u) return U(u) and U(u).level end
@@ -83,6 +85,11 @@ _G.C_Item = { GetItemCount = function() return 5 end }
 _G.RAID_CLASS_COLORS = setmetatable({}, { __index = function() return { r = 1, g = 1, b = 1 } end })
 _G.LOCALIZED_CLASS_NAMES_MALE = {}
 local cvars = { nameplateShowFriends = "0" }
+local plates, clickThrough = {}, nil
+_G.C_NamePlate = {
+    GetNamePlateForUnit = function(u) return plates[u] end,
+    SetNamePlateFriendlyClickThrough = function(v) clickThrough = v end,
+}
 _G.C_CVar = { GetCVar = function(k) return cvars[k] end, SetCVar = function(k, v) cvars[k] = tostring(v) end }
 local optionsPanel
 _G.Settings = {
@@ -107,7 +114,7 @@ local function eventFrame()
     end
 end
 local ev = eventFrame()
-local function fire(event) ev.scripts.OnEvent(ev, event) end
+local function fire(event, ...) ev.scripts.OnEvent(ev, event, ...) end
 local function tick() ev.scripts.OnUpdate(ev, 1.1) end
 
 local failures = 0
@@ -130,16 +137,30 @@ check(row(3).row and row(3).row.name == "Moi", "ligne 3 = soi-même")
 check(row(4).row and row(4).row.name == "Valeera", "ligne 4 = inconnu")
 check(row(5).shown == false, "ligne 5 masquée")
 check(row(1).attrs.type1 == "spell" and row(1).attrs.spell1 == 10938 and row(1).attrs.unit == "party1", "attributs groupe")
-check(row(4).attrs.type == "macro" and row(4).attrs.macrotext == "/targetexact Valeera\n/cast Sort10938(Rang 1)\n/targetlasttarget", "macro inconnu")
+check(row(4).attrs.type1 == "spell" and row(4).attrs.spell1 == 10938 and row(4).attrs.unit == "nameplate1", "inconnu : sort lancé sur sa barre de nom, sans ciblage")
 check(FriendlyBufferFrame.shown, "fenêtre visible")
 
--- PreClick sans cible -> /cleartarget
+-- PreClick : la barre de nom a changé de joueur -> on retrouve le bon
+local valeera = units.nameplate1
+units.nameplate1 = { name = "Autre", class = "MAGE", level = 60, guid = "G9", buffs = {}, stranger = true }
+units.nameplate2 = valeera
 row(4).scripts.PreClick(row(4), "LeftButton")
-check(row(4).attrs.macrotext:match("/cleartarget$"), "PreClick sans cible")
+check(row(4).attrs.unit == "nameplate2" and row(4).attrs.type1 == "spell", "PreClick : unité recalée sur le bon GUID")
+-- PreClick : joueur disparu -> rien n'est lancé (jamais sur soi)
+units.nameplate2 = nil
+row(4).scripts.PreClick(row(4), "LeftButton")
+check(row(4).attrs.type1 == nil and row(4).attrs.type2 == nil, "PreClick : joueur introuvable, clic désactivé")
+units.nameplate1 = valeera
+fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
+tick()
+check(row(4).row.name == "Valeera" and row(4).attrs.unit == "nameplate1", "Valeera de retour")
 
--- Combat : Garrosh reçoit le buff, attributs figés, ligne marquée faite
-inCombat = true
+-- Combat : lignes hors groupe désactivées à l'entrée en combat
 fire("PLAYER_REGEN_DISABLED")
+inCombat = true
+check(row(4).attrs.type1 == nil and row(4).done == true, "combat : inconnu désactivé")
+check(row(1).attrs.type1 == "spell", "combat : membre du groupe toujours actif")
+-- Combat : Garrosh reçoit le buff, attributs figés, ligne marquée faite
 units.party1.buffs = { { spellId = 10938, sourceUnit = "player", duration = 1800, expirationTime = 2700 } }
 tick()
 check(row(1).done == true and row(1).attrs.spell1 == 10938, "combat : ligne faite, attributs inchangés")
@@ -148,7 +169,7 @@ check(row(1).done == true and row(1).attrs.spell1 == 10938, "combat : ligne fait
 inCombat = false
 fire("PLAYER_REGEN_ENABLED")
 check(row(1).row.name == "Jaina" and row(1).done == false, "après combat : Jaina en tête")
-check(row(4).shown == false, "après combat : 3 lignes")
+check(row(3).row.name == "Valeera" and row(3).attrs.type1 == "spell" and row(4).shown == false, "après combat : 3 lignes + inconnu réactivé")
 
 -- Groupe : option buffs de groupe
 ns.db.groupBuffs = true
@@ -164,6 +185,20 @@ for _ = 1, 2 do
 end
 check(ns.db.displayMode == "range", "mode d'affichage cyclé deux fois")
 for i = 1, 4 do if row(i).scripts.OnEnter then row(i).scripts.OnEnter(row(i)) end end
+
+-- Barres de nom invisibles
+plates.nameplate1 = { UnitFrame = newObject() }
+ns.db.hiddenPlates = true
+ns.OnSettingsChanged()
+check(cvars.nameplateShowFriends == "1" and clickThrough == true, "barres invisibles : CVar + clic traversant")
+check(plates.nameplate1.UnitFrame.alpha == 0, "barres invisibles : barre existante masquée")
+fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
+check(plates.nameplate1.UnitFrame.alpha == 1, "barre recyclée : visibilité rendue")
+fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
+check(plates.nameplate1.UnitFrame.alpha == 0, "nouvelle barre alliée masquée")
+ns.db.hiddenPlates = false
+ns.OnSettingsChanged()
+check(plates.nameplate1.UnitFrame.alpha == 1 and clickThrough == false, "option coupée : barres restaurées")
 
 -- Commandes
 printed = {}

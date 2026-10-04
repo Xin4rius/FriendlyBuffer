@@ -19,9 +19,12 @@ local function groupUnits()
     return units
 end
 
+-- Barres de nom d'abord : c'est l'unité sur laquelle le sort sera lancé. La cible en dernier
+-- (le survol est exclu : il disparaît dès que la souris va sur la fenêtre).
 local function strangerUnits()
-    local units = { "target", "mouseover" }
+    local units = {}
     for i = 1, MAX_NAMEPLATES do units[#units + 1] = "nameplate" .. i end
+    units[#units + 1] = "target"
     return units
 end
 
@@ -69,4 +72,14 @@ function Scanner.Collect(includeStrangers)
         for _, unit in ipairs(strangerUnits()) do add(unit, false) end
     end
     return result, rejected
+end
+
+-- Unité qui désigne actuellement ce GUID (les numéros de barres de nom changent), ou nil.
+function Scanner.FindUnit(guid)
+    for _, list in ipairs({ groupUnits(), strangerUnits() }) do
+        for _, unit in ipairs(list) do
+            if UnitGUID(unit) == guid then return unit end
+        end
+    end
+    return nil
 end

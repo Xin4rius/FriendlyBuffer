@@ -13,6 +13,7 @@ local DEFAULTS = {
     locked = false,
     maxRows = 10,
     includeStrangers = true,
+    hiddenPlates = false,
     thresholdShort = 60,
     thresholdLong = 180,
 }

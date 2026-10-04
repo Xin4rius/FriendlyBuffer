@@ -169,11 +169,12 @@ function Options.Create()
     plates:SetScript("OnClick", function() ns.ToggleNameplates(); changed() end)
     refreshers[#refreshers + 1] = function() plates:SetChecked(ns.Compat.FriendlyNameplatesShown()) end
 
-    checkbox(panel, "Masquer la fenêtre quand personne n'a besoin de buff", "autoHide", 16, -138)
-    checkbox(panel, "Verrouiller la position de la fenêtre", "locked", 16, -164)
+    checkbox(panel, "Barres de nom alliées invisibles (actives pour l'addon, mais transparentes et non cliquables)", "hiddenPlates", 40, -138)
+    checkbox(panel, "Masquer la fenêtre quand personne n'a besoin de buff", "autoHide", 16, -164)
+    checkbox(panel, "Verrouiller la position de la fenêtre", "locked", 16, -190)
 
     local modeLabel = label(panel, "Mode d'affichage")
-    modeLabel:SetPoint("TOPLEFT", 20, -200)
+    modeLabel:SetPoint("TOPLEFT", 20, -226)
     local modeButton = smallButton(panel, "", 160, function()
         local modes = ns.Config.DISPLAY_MODES
         for i, m in ipairs(modes) do
@@ -184,14 +185,14 @@ function Options.Create()
         end
         changed()
     end)
-    modeButton:SetPoint("TOPLEFT", 250, -197)
+    modeButton:SetPoint("TOPLEFT", 250, -223)
     refreshers[#refreshers + 1] = function() modeButton:SetText(DISPLAY_LABELS[ns.db.displayMode]) end
 
-    stepper(panel, "Nombre de lignes maximum", "maxRows", 20, -230, 1, 1, 20, "%d")
-    stepper(panel, "Expire bientôt (buffs de 5/10 min)", "thresholdShort", 20, -256, 15, 15, 300, "%d s")
-    stepper(panel, "Expire bientôt (buffs 30/60 min)", "thresholdLong", 20, -282, 30, 30, 900, "%d s")
+    stepper(panel, "Nombre de lignes maximum", "maxRows", 20, -256, 1, 1, 20, "%d")
+    stepper(panel, "Expire bientôt (buffs de 5/10 min)", "thresholdShort", 20, -282, 15, 15, 300, "%d s")
+    stepper(panel, "Expire bientôt (buffs 30/60 min)", "thresholdLong", 20, -308, 30, 30, 900, "%d s")
 
-    buildPriorities(panel, -322)
+    buildPriorities(panel, -348)
 
     panel:SetScript("OnShow", function()
         for _, refresh in ipairs(refreshers) do refresh() end

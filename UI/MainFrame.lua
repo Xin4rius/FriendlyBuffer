@@ -34,51 +34,45 @@ local function reasonText(need)
     return REASON_LABELS[need.reason]
 end
 
-local function canModify()
-    return not InCombatLockdown()
-end
-
 ---------------------------------------------------------------------------
 -- Attributs sécurisés
 ---------------------------------------------------------------------------
 
 local function clearAttributes(button)
-    for _, attr in ipairs({ "type", "type1", "type2", "spell1", "spell2", "macrotext", "macrotext1", "macrotext2", "unit" }) do
+    for _, attr in ipairs({ "type", "type1", "type2", "spell1", "spell2", "unit" }) do
         button:SetAttribute(attr, nil)
     end
 end
 
--- Macro pour un inconnu : cibler par nom, lancer, revenir à la cible précédente.
-local function strangerMacro(name, castString, restoreLine)
-    return "/targetexact " .. name .. "\n/cast " .. castString .. "\n" .. restoreLine
-end
-
+-- Le sort est lancé directement sur l'unité (groupe ou barre de nom) : jamais de ciblage.
 local function assign(button, row)
     clearAttributes(button)
     local need = row.need
     button.row = row
     button.done = false
-    if row.isGroup then
-        local left = need.group or need.single
-        button:SetAttribute("unit", row.unit)
-        button:SetAttribute("type1", "spell")
-        button:SetAttribute("spell1", left.id)
-        button:SetAttribute("type2", "spell")
-        button:SetAttribute("spell2", need.single.id)
-    else
-        button:SetAttribute("type", "macro")
-        button:SetAttribute("macrotext", strangerMacro(row.name, ns.CastString(need.single), "/targetlasttarget"))
-    end
+    button:SetAttribute("unit", row.unit)
+    button:SetAttribute("type1", "spell")
+    button:SetAttribute("spell1", (need.group or need.single).id)
+    button:SetAttribute("type2", "spell")
+    button:SetAttribute("spell2", need.single.id)
 end
 
--- Hors combat : sans cible au départ, on vide la cible au lieu de revenir à une ancienne.
+-- Hors combat, juste avant le sort : l'unité désigne-t-elle toujours ce joueur ?
+-- Sinon on la recale ; joueur introuvable -> on désactive le clic plutôt que de buffer quelqu'un d'autre.
 local function onPreClick(button)
     local row = button.row
-    if not row or row.isGroup or not canModify() then return end
-    local restore = UnitExists("target") and "/targetlasttarget" or "/cleartarget"
-    button:SetAttribute("macrotext", strangerMacro(row.name, ns.CastString(row.need.single), restore))
+    if not row or button.done or InCombatLockdown() then return end
+    local unit = button:GetAttribute("unit")
+    if unit and UnitGUID(unit) == row.guid then return end
+    local found = ns.Scanner.FindUnit(row.guid)
+    if found then
+        button:SetAttribute("unit", found)
+    else
+        clearAttributes(button)
+        button.done = true
+        ns.Print(row.name .. " n'est plus visible.")
+    end
 end
-
 ---------------------------------------------------------------------------
 -- Affichage
 ---------------------------------------------------------------------------
@@ -119,7 +113,9 @@ local function onEnter(button)
     if not row then return end
     GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
     GameTooltip:AddLine(row.name, ns.Compat.ClassColor(row.class))
-    if button.done then
+    if button.done and not row.isGroup and InCombatLockdown() then
+        GameTooltip:AddLine("Hors groupe : indisponible en combat", 0.6, 0.6, 0.6)
+    elseif button.done then
         GameTooltip:AddLine("Plus besoin de buff", 0.4, 1, 0.4)
     else
         local c = REASON_COLORS[row.need.reason]
@@ -134,7 +130,7 @@ local function onEnter(button)
         else
             GameTooltip:AddLine("Clic : " .. ns.SpellLabel(row.need.single), 1, 1, 1)
         end
-        if not row.isGroup then GameTooltip:AddLine("Hors groupe : ciblé par son nom", 0.6, 0.6, 0.6) end
+        if not row.isGroup then GameTooltip:AddLine("Hors groupe : désactivé en combat", 0.6, 0.6, 0.6) end
     end
     GameTooltip:Show()
 end
@@ -220,8 +216,9 @@ local function softRender(rows, canAssign)
         if button:IsShown() and button.row then
             local row = byGuid[button.row.guid]
             -- En combat le bouton lance toujours l'ancien sort : si le besoin a changé de buff,
-            -- l'ancien est satisfait et la ligne est considérée comme faite.
-            if row and not canAssign and row.need.family ~= button.row.need.family then row = nil end
+            -- l'ancien est satisfait et la ligne est considérée comme faite. Les inconnus sont
+            -- désactivés en combat (leur barre de nom peut changer de numéro).
+            if row and not canAssign and (not row.isGroup or row.need.family ~= button.row.need.family) then row = nil end
             if row then
                 if canAssign then assign(button, row) else button.row = row end
                 button.done = false
@@ -248,6 +245,22 @@ function MainFrame.Render(rows)
     else
         fullRender(rows)
     end
+end
+
+-- Entrée en combat (PLAYER_REGEN_DISABLED : dernier instant où les attributs sont modifiables).
+-- Les numéros de barres de nom peuvent changer sans qu'on puisse recaler les boutons :
+-- les lignes hors groupe sont désactivées jusqu'à la fin du combat.
+function MainFrame.OnCombatStart()
+    if not frame or InCombatLockdown() then return end
+    for i = 1, MAX_ROWS_LIMIT do
+        local button = buttons[i]
+        if button:IsShown() and button.row and not button.row.isGroup then
+            clearAttributes(button)
+            button.done = true
+            paint(button, button.row, true)
+        end
+    end
+    pending = true
 end
 
 -- Appelé en sortie de combat ou quand le curseur quitte la fenêtre.

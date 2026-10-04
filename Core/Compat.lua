@@ -89,6 +89,18 @@ function Compat.SetFriendlyNameplates(shown)
     Compat.SetCVar("nameplateShowFriends", shown and "1" or "0")
 end
 
+-- Barre de nom d'une unité, ou nil (absente, ou interdite aux addons comme en instance).
+function Compat.GetNamePlateForUnit(unit)
+    if C_NamePlate and C_NamePlate.GetNamePlateForUnit then return C_NamePlate.GetNamePlateForUnit(unit) end
+    return nil
+end
+
+function Compat.SetFriendlyClickThrough(enabled)
+    if C_NamePlate and C_NamePlate.SetNamePlateFriendlyClickThrough then
+        C_NamePlate.SetNamePlateFriendlyClickThrough(enabled)
+    end
+end
+
 function Compat.ClassColor(class)
     local c = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[class]
     if c then return c.r, c.g, c.b end
