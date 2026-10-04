@@ -1,0 +1,9 @@
+# Exclus des archives de tag (git archive) : seul l'addon est livré.
+.gitea export-ignore
+.gitattributes export-ignore
+.gitignore export-ignore
+.pkgmeta export-ignore
+tests export-ignore
+README.md export-ignore
+README.fr.md export-ignore
+Media/logo.png export-ignore

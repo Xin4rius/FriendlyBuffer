@@ -3,3 +3,7 @@ package-as: FriendlyBuffer
 ignore:
   - tests
   - .gitea
+  - .gitattributes
+  - README.md
+  - README.fr.md
+  - Media/logo.png
