@@ -22,7 +22,7 @@ local BLOCKED_COLOR = { 0.6, 0.6, 0.6 }
 
 local frame, buttons = nil, {}
 local pending = false     -- une reconstruction complète attend la fin du combat / du survol
-local lastRows = {}
+local lastRows, lastDone = {}, {}
 
 local function formatTime(seconds)
     if not seconds then return "" end
@@ -119,13 +119,19 @@ local function paint(button, row, done)
     button.name:SetTextColor(r, g, b)
 
     local showDetails = mode ~= "minimal"
+    -- « OK » (joueur qu'on vient de buffer) s'affiche aussi en mode minimaliste.
+    local showReason = showDetails or done
     button.icon:SetShown(showDetails)
-    button.reason:SetShown(showDetails)
+    button.reason:SetShown(showReason)
     button.name:ClearAllPoints()
     if showDetails then
         local _, icon = ns.Compat.GetSpellInfo(row.need.single.id)
         button.icon:SetTexture(icon)
         button.name:SetPoint("LEFT", button.icon, "RIGHT", 4, 0)
+    else
+        button.name:SetPoint("LEFT", button, "LEFT", 2, 0)
+    end
+    if showReason then
         local text, c
         if done then
             text, c = "OK", { 0.4, 1, 0.4 }
@@ -136,18 +142,15 @@ local function paint(button, row, done)
         end
         button.reason:SetText(text)
         button.reason:SetTextColor(c[1], c[2], c[3])
-    else
-        button.name:SetPoint("LEFT", button, "LEFT", 2, 0)
     end
-    button.name:SetPoint("RIGHT", button, "RIGHT", showDetails and -50 or -2, 0)
+    button.name:SetPoint("RIGHT", button, "RIGHT", showReason and -50 or -2, 0)
 
     local alpha = 1
     if done then
-        alpha = 0.35
+        alpha = 0.6
     elseif row.blocked then
         alpha = 0.45
-    end
-    button:SetAlpha(alpha)
+    end    button:SetAlpha(alpha)
 end
 
 local function onEnter(button)
@@ -204,7 +207,7 @@ local function createButton(index)
     button:SetScript("PreClick", onPreClick)
     -- Mémorise le joueur cliqué : une erreur « pas en vue » juste après le concerne.
     button:SetScript("PostClick", function(self)
-        if self.row and not self.done and not IsAltKeyDown() then ns.NoteClick(self.row.guid) end
+        if self.row and not self.done and not IsAltKeyDown() then ns.NoteClick(self.row) end
     end)
     button:SetScript("OnEnter", onEnter)
     button:SetScript("OnLeave", GameTooltip_Hide)
@@ -232,29 +235,59 @@ local function shouldShow(total)
 end
 
 -- Reconstruction complète : ordre, attributs, visibilité. Hors combat uniquement.
-local function fullRender(rows)
+-- doneRows : joueurs qu'on vient de buffer, affichés « OK » en bas, sans action au clic.
+local function fullRender(rows, doneRows)
+    local list = {}
+    for _, row in ipairs(rows) do list[#list + 1] = row end
+    for _, row in ipairs(doneRows) do list[#list + 1] = row end
     local maxRows = math.min(ns.db.maxRows, MAX_ROWS_LIMIT)
-    local shown = math.min(#rows, maxRows)
+    local shown = math.min(#list, maxRows)
     for i = 1, MAX_ROWS_LIMIT do
         local button = buttons[i]
-        if i <= shown then
-            assign(button, rows[i])
-            paint(button, rows[i], false)
-            button:Show()
-        else
+        if i > shown then
             clearAttributes(button)
             button.row = nil
             button:Hide()
+        elseif i <= #rows then
+            assign(button, list[i])
+            paint(button, list[i], false)
+            button:Show()
+        else
+            clearAttributes(button)
+            button.row = list[i]
+            button.done = true
+            paint(button, list[i], true)
+            button:Show()
         end
     end
     layout(shown)
-    frame:SetShown(shouldShow(#rows))
+    frame:SetShown(shouldShow(#list))
     pending = false
 end
 
--- Mise à jour sur place des lignes affichées (même joueur, même position).
--- canAssign : hors combat on peut aussi réaffecter/désactiver les attributs.
-local function softRender(rows, canAssign)
+-- Ordre stable sous le curseur : les lignes déjà affichées gardent leur ordre relatif (celle qu'on
+-- vient de buffer part en bas et les suivantes remontent d'un cran) ; les nouvelles s'ajoutent
+-- après, jamais au-dessus. Les joueurs derrière un obstacle restent en dernier.
+local function stableOrder(rows)
+    local byGuid, used, ordered = {}, {}, {}
+    for _, row in ipairs(rows) do byGuid[row.guid] = row end
+    local function take(row, blocked)
+        if row and not used[row.guid] and (row.blocked or false) == blocked then
+            used[row.guid] = true
+            ordered[#ordered + 1] = row
+        end
+    end
+    for _, blocked in ipairs({ false, true }) do
+        for i = 1, MAX_ROWS_LIMIT do
+            local button = buttons[i]
+            if button:IsShown() and button.row then take(byGuid[button.row.guid], blocked) end
+        end
+        for _, row in ipairs(rows) do take(row, blocked) end
+    end
+    return ordered
+end
+-- En combat : mise à jour de l'affichage seulement (les attributs sécurisés sont figés).
+local function combatRender(rows)
     local byGuid = {}
     for _, row in ipairs(rows) do byGuid[row.guid] = row end
     for i = 1, MAX_ROWS_LIMIT do
@@ -263,13 +296,12 @@ local function softRender(rows, canAssign)
             local row = byGuid[button.row.guid]
             -- En combat le bouton lance toujours l'ancien sort : si le besoin a changé de buff,
             -- l'ancien est satisfait et la ligne est considérée comme faite.
-            if row and not canAssign and row.need.family ~= button.row.need.family then row = nil end
+            if row and row.need.family ~= button.row.need.family then row = nil end
             if row then
-                if canAssign then assign(button, row) else button.row = row end
+                button.row = row
                 button.done = false
                 paint(button, row, false)
             else
-                if canAssign then clearAttributes(button) end
                 button.done = true
                 paint(button, button.row, true)
             end
@@ -278,24 +310,26 @@ local function softRender(rows, canAssign)
     pending = true
 end
 
-function MainFrame.Render(rows)
+function MainFrame.Render(rows, doneRows)
     if not frame then return end
-    lastRows = rows
+    doneRows = doneRows or {}
+    lastRows, lastDone = rows, doneRows
     updateTitle(#rows)
     if InCombatLockdown() then
-        softRender(rows, false)
+        combatRender(rows)
     elseif frame:IsShown() and frame:IsMouseOver() then
-        -- Pas de réordonnancement sous le curseur : évite de cliquer sur le mauvais joueur.
-        softRender(rows, true)
+        -- Sous le curseur : pas de tri complet, pour enchaîner les clics au même endroit.
+        fullRender(stableOrder(rows), doneRows)
+        pending = true
     else
-        fullRender(rows)
+        fullRender(rows, doneRows)
     end
 end
 
 -- Appelé en sortie de combat ou quand le curseur quitte la fenêtre.
 function MainFrame.Flush()
     if frame and pending and not InCombatLockdown() then
-        fullRender(lastRows)
+        fullRender(lastRows, lastDone)
         updateTitle(#lastRows)
     end
 end

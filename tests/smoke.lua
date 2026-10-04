@@ -26,7 +26,7 @@ function methods:CreateTexture() return newObject() end
 function methods:SetText(t) self.text = t end
 function methods:GetText() return self.text end
 function methods:GetChecked() return false end
-function methods:IsMouseOver() return false end
+function methods:IsMouseOver() return rawget(self, "mouseOver") or false end
 function methods:SetPoint(...) local pts = rawget(self, "points") or {}; pts[#pts + 1] = { ... }; self.points = pts end
 function methods:ClearAllPoints() self.points = {} end
 function methods:GetNumPoints() return #(rawget(self, "points") or {}) end
@@ -212,6 +212,24 @@ inCombat = false
 fire("PLAYER_REGEN_ENABLED")
 check(row(1).row.name == "Jaina" and row(1).done == false, "après combat : Jaina en tête")
 check(row(3).row.name == "Valeera Sanguinar" and row(4).shown == false, "après combat : 3 lignes")
+
+-- Enchaîner les buffs : curseur sur la fenêtre, clic sur Jaina, elle reçoit son buff
+FriendlyBufferFrame.mouseOver = true
+check(row(1).row.name == "Jaina", "avant : Jaina en tête")
+row(1).scripts.PostClick(row(1), "LeftButton")
+local jainaBuffs = units.party2.buffs
+units.party2.buffs = { jainaBuffs[1], { spellId = 27841, sourceUnit = "player", duration = 1800, expirationTime = now + 1800 } }
+tick()
+check(row(1).row.name == "Moi" and row(2).row.name == "Valeera Sanguinar", "les suivants remontent d'un cran sous le curseur")
+check(row(3).row.name == "Jaina" and row(3).done == true and row(3).attrs.type1 == nil and row(3).shown, "Jaina en bas, « OK », sans action au clic")
+check(row(3).reason.text == "OK" and row(3).reason.shown, "« OK » visible même en mode minimaliste")
+now = now + 6
+tick()
+check(row(3).shown == false and row(2).row.name == "Valeera Sanguinar", "« OK » disparaît après 5 s")
+FriendlyBufferFrame.mouseOver = false
+units.party2.buffs = jainaBuffs
+tick()
+check(row(1).row.name == "Jaina", "curseur parti : tri complet rétabli")
 
 -- Groupe : option buffs de groupe
 ns.db.groupBuffs = true

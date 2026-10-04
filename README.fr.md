@@ -36,9 +36,13 @@ Le clic sur un membre du groupe lance le buff sans changer votre cible. Pour un 
 le cible par son nom, lance le buff puis rétablit votre cible ; si le ciblage échoue, rien n'est
 lancé. Les inconnus marqués JcJ sont ignorés si vous ne l'êtes pas.
 
+**Enchaîner les buffs** : dès que le joueur cliqué a reçu son buff, sa ligne passe en bas avec
+**OK** (5 secondes par défaut, réglable) et les suivants remontent : il suffit de cliquer toujours
+au même endroit. Tant que le curseur est sur la fenêtre, les nouveaux joueurs s'ajoutent en bas,
+jamais au-dessus.
+
 En combat, la liste est figée (WoW interdit aux addons de modifier les boutons de sort en combat)
-mais reste cliquable ; elle est reconstruite à la sortie du combat. Elle ne se réordonne pas non
-plus tant que le curseur est sur la fenêtre, pour éviter de cliquer sur le mauvais joueur.
+mais reste cliquable ; elle est reconstruite à la sortie du combat.
 
 ## La liste
 
@@ -55,6 +59,7 @@ plus tant que le curseur est sur la fenêtre, pour éviter de cliquer sur le mau
 - Mode d'affichage : minimaliste (nom seul) ou informatif (icône du sort, raison, temps restant)
 - Nombre de lignes maximum, seuils « expire bientôt » (60 s pour les buffs de 5/10 min, 180 s pour
   ceux de 30/60 min)
+- Durée d'affichage « OK » des joueurs buffés (5 s par défaut, 0 pour les retirer aussitôt)
 - Noms des barres discrètes : police, contour, taille, ombre, guilde sous le nom. Par défaut, ils
   ressemblent aux noms de WoW sans Maj+V, avec des polices de secours pour les noms chinois, coréens
   et cyrilliques.

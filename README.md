@@ -35,9 +35,13 @@ Clicking a group member casts the buff without changing your target. For a stran
 targets them by name, casts the buff, then restores your previous target; if the targeting fails,
 nothing is cast. PvP-flagged strangers are skipped unless you are flagged too.
 
+**Chain buffing**: once a player you clicked has their buff, their row moves to the bottom marked
+**OK** (for 5 seconds by default, configurable) and the next players move up, so you can keep
+clicking the same spot. While your cursor is over the window, new players are only added at the
+bottom, never above.
+
 In combat the list is frozen (WoW does not let addons change spell buttons in combat) but stays
-clickable; it is rebuilt when combat ends. It also does not reorder while your cursor is over the
-window, so you never click the wrong player.
+clickable; it is rebuilt when combat ends.
 
 ## The list
 
@@ -53,6 +57,7 @@ window, so you never click the wrong player.
 - Include strangers, auto-hide when empty, lock the window
 - Display mode: minimal (name only) or detailed (spell icon, reason, time left)
 - Maximum number of rows, "expiring soon" thresholds (60 s for 5/10 min buffs, 180 s for 30/60 min buffs)
+- How long buffed players stay shown as OK (5 s by default, 0 to hide them right away)
 - Names on discreet nameplates: font, outline, size, shadow, guild under the name. Defaults look
   like WoW names without Shift+V, with fallback fonts for Chinese, Korean and Cyrillic names.
 - Buff priorities per target class: reorder, enable or disable each buff

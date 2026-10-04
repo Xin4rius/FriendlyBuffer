@@ -64,8 +64,42 @@ local CLICK_WINDOW = 1.0  -- délai max entre le clic et l'erreur
 local blockedUntil = {}   -- guid -> GetTime() de fin
 local lastClick
 
-function ns.NoteClick(guid)
-    lastClick = { guid = guid, time = GetTime() }
+-- Joueurs qu'on vient de buffer : affichés « OK » en bas de la liste pendant ns.db.doneDuration s,
+-- pour enchaîner les clics au même endroit.
+local CLICK_WATCH = 10    -- délai max entre le clic et la disparition du besoin
+local recentClicks = {}   -- guid -> { time, row }
+local doneUntil = {}      -- guid -> { untilTime, row }
+
+function ns.NoteClick(row)
+    local now = GetTime()
+    lastClick = { guid = row.guid, time = now }
+    recentClicks[row.guid] = { time = now, row = row }
+end
+
+-- Lignes « OK » à afficher sous `rows` (les joueurs qui ont encore besoin d'un buff).
+local function doneRows(rows, now)
+    local needed = {}
+    for _, row in ipairs(rows) do needed[row.guid] = true end
+    for guid, click in pairs(recentClicks) do
+        if not needed[guid] then
+            if ns.db.doneDuration > 0 then doneUntil[guid] = { untilTime = now + ns.db.doneDuration, row = click.row } end
+            recentClicks[guid] = nil
+        elseif now - click.time > CLICK_WATCH then
+            recentClicks[guid] = nil
+        end
+    end
+    local done = {}
+    for guid, entry in pairs(doneUntil) do
+        if entry.untilTime <= now or needed[guid] then
+            doneUntil[guid] = nil
+        else
+            done[#done + 1] = entry
+        end
+    end
+    -- Le plus récent en bas.
+    table.sort(done, function(a, b) return a.untilTime < b.untilTime end)
+    for i, entry in ipairs(done) do done[i] = entry.row end
+    return done
 end
 
 local function onUIError(arg1, arg2)
@@ -123,7 +157,8 @@ local dirty, sinceScan, sinceTick = true, 0, 0
 
 local function scan()
     dirty, sinceScan, sinceTick = false, 0, 0
-    ns.MainFrame.Render(buildRows())
+    local rows = buildRows()
+    ns.MainFrame.Render(rows, doneRows(rows, GetTime()))
     if ns.db.hiddenPlates then ns.Nameplates.Refresh() end
 end
 

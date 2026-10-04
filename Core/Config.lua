@@ -44,6 +44,7 @@ local DEFAULTS = {
     plateGuild = true,
     thresholdShort = 60,
     thresholdLong = 180,
+    doneDuration = 5,       -- secondes d'affichage « OK » d'un joueur qu'on vient de buffer (0 = jamais)
 }
 
 local function copyList(list)

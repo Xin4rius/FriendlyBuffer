@@ -188,7 +188,7 @@ local function buildPriorities(parent, y)
     end
 end
 
-local CONTENT_WIDTH, CONTENT_HEIGHT = 640, 800
+local CONTENT_WIDTH, CONTENT_HEIGHT = 640, 830
 
 function Options.Create()
     panel = CreateFrame("Frame")
@@ -227,16 +227,17 @@ function Options.Create()
     stepper(content, L["Maximum number of rows"], "maxRows", 20, -256, 1, 1, 20, "%d")
     stepper(content, L["Expiring soon (5/10 min buffs)"], "thresholdShort", 20, -282, 15, 15, 300, "%d s")
     stepper(content, L["Expiring soon (30/60 min buffs)"], "thresholdLong", 20, -308, 30, 30, 900, "%d s")
+    stepper(content, L["Keep buffed players shown as OK for"], "doneDuration", 20, -334, 1, 0, 30, "%d s")
 
     local namesHeader = label(content, L["Names on discreet nameplates"], "GameFontNormalLarge")
-    namesHeader:SetPoint("TOPLEFT", 16, -348)
-    choice(content, L["Font"], "plateFont", ns.Config.PLATE_FONTS, 20, -378)
-    choice(content, L["Outline"], "plateOutline", ns.Config.PLATE_OUTLINES, 20, -408)
-    stepper(content, L["Size"], "plateFontSize", 20, -436, 1, 8, 24, "%d")
-    checkbox(content, L["Shadow"], "plateShadow", 16, -458)
-    checkbox(content, L["Show the guild under the name"], "plateGuild", 16, -484)
+    namesHeader:SetPoint("TOPLEFT", 16, -374)
+    choice(content, L["Font"], "plateFont", ns.Config.PLATE_FONTS, 20, -404)
+    choice(content, L["Outline"], "plateOutline", ns.Config.PLATE_OUTLINES, 20, -434)
+    stepper(content, L["Size"], "plateFontSize", 20, -462, 1, 8, 24, "%d")
+    checkbox(content, L["Shadow"], "plateShadow", 16, -484)
+    checkbox(content, L["Show the guild under the name"], "plateGuild", 16, -510)
 
-    buildPriorities(content, -530)
+    buildPriorities(content, -556)
 
     panel:SetScript("OnShow", function()
         for _, refresh in ipairs(refreshers) do refresh() end
