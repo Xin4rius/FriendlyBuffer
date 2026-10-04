@@ -31,6 +31,9 @@ function methods:GetPoint() return "CENTER", nil, "CENTER", 10, 20 end
 function methods:RegisterEvent(e) self.events[e] = true end
 function methods:GetID() return 42 end
 function methods:SetAlpha(a) self.alpha = a end
+function methods:GetChildren() return unpack(rawget(self, "children") or {}) end
+function methods:GetRegions() return unpack(rawget(self, "regions") or {}) end
+function methods:GetParent() return rawget(self, "parent") end
 
 -- Monde simulé ---------------------------------------------------------------
 local inCombat = false
@@ -41,6 +44,7 @@ local units = {
     party2  = { name = "Jaina", class = "MAGE", level = 60, guid = "G2",
                 buffs = { { spellId = 10938, name = "Robustesse", sourceUnit = "player", duration = 1800, expirationTime = 2500 } } },
     nameplate1 = { name = "Valeera", surname = "Sanguinar", class = "ROGUE", level = 58, guid = "G3", buffs = {}, stranger = true },
+    nameplate3 = { name = "Loin", class = "WARRIOR", level = 60, guid = "G7", buffs = {}, stranger = true, far = true },
 }
 local function U(unit) return units[unit] end
 
@@ -70,6 +74,7 @@ _G.UnitInRaid = function() return nil end
 _G.UnitIsUnit = function(a, b) return a == b end
 _G.UnitIsPVP = function() return false end
 _G.UnitCanAttack = function() return false end
+_G.IsAltKeyDown = function() return false end
 _G.UnitName = function(u) if U(u) then return U(u).name, U(u).surname end end
 _G.UnitGUID = function(u) return U(u) and U(u).guid end
 _G.UnitLevel = function(u) return U(u) and U(u).level end
@@ -79,7 +84,7 @@ _G.C_UnitAuras = { GetBuffDataByIndex = function(u, i) return U(u) and U(u).buff
 _G.C_Spell = {
     GetSpellInfo = function(id) return { name = "Sort" .. id, iconID = 1 } end,
     GetSpellSubtext = function() return "Rang 1" end,
-    IsSpellInRange = function() return true end,
+    IsSpellInRange = function(_, u) return not (U(u) and U(u).far) end,
 }
 _G.C_Item = { GetItemCount = function() return 5 end }
 _G.RAID_CLASS_COLORS = setmetatable({}, { __index = function() return { r = 1, g = 1, b = 1 } end })
@@ -98,6 +103,7 @@ _G.Settings = {
     OpenToCategory = noop,
 }
 local printed = {}
+_G.SPELL_FAILED_LINE_OF_SIGHT = "La cible n'est pas en vue"
 _G.print = function(...) printed[#printed + 1] = table.concat({ ... }, " ") end
 
 -- Chargement dans l'ordre du .toc ---------------------------------------------
@@ -135,11 +141,22 @@ check(row(1).row and row(1).row.name == "Garrosh", "ligne 1 = Garrosh")
 check(row(2).row and row(2).row.name == "Jaina" and row(2).row.need.family == "spirit", "ligne 2 = Jaina / esprit")
 check(row(3).row and row(3).row.name == "Moi", "ligne 3 = soi-même")
 check(row(4).row and row(4).row.name == "Valeera Sanguinar", "ligne 4 = inconnu, prénom + nom séparés par un espace")
-check(row(5).shown == false, "ligne 5 masquée")
+check(row(5).shown == false, "ligne 5 masquée (joueur hors de portée exclu)")
 check(row(1).attrs.type1 == "macro" and row(1).attrs.macrotext1 == "/cast [@party1] Sort10938(Rang 1)", "groupe : /cast [@unité], sans ciblage")
 local STRANGER = "/cleartarget\n/targetexact Valeera Sanguinar\n/cast [@target,help,nodead] Sort10938(Rang 1)\n"
 check(row(4).attrs.type1 == "macro" and row(4).attrs.macrotext1 == STRANGER .. "/targetlasttarget", "inconnu : ciblage par prénom nom")
 check(FriendlyBufferFrame.shown, "fenêtre visible")
+check(row(1).attrs["alt-type1"] == "macro" and row(1).attrs["alt-macrotext1"] == "/target party1", "Alt+clic : sélectionne un membre du groupe")
+check(row(4).attrs["alt-macrotext1"] == "/targetexact Valeera Sanguinar", "Alt+clic : sélectionne un inconnu")
+
+-- Obstacle : clic sur Valeera puis erreur « pas en vue » -> grisée et en bas de liste
+row(4).scripts.PostClick(row(4), "LeftButton")
+fire("UI_ERROR_MESSAGE", 0, SPELL_FAILED_LINE_OF_SIGHT)
+tick()
+check(row(4).row.name == "Valeera Sanguinar" and row(4).row.blocked == true and row(4).alpha < 1, "obstacle : ligne grisée")
+now = now + 6
+tick()
+check(row(4).row.blocked ~= true and row(4).alpha == 1, "obstacle : levé après quelques secondes")
 
 -- PreClick sans cible -> on ne revient pas à une ancienne cible
 row(4).scripts.PreClick(row(4), "LeftButton")
@@ -178,22 +195,25 @@ for _ = 1, 2 do
         if o.scripts.OnClick and not o.frameName:match("^FriendlyBufferRow") then o.scripts.OnClick(o, "LeftButton") end
     end
 end
-check(ns.db.displayMode == "range", "mode d'affichage cyclé deux fois")
+check(ns.db.displayMode == "minimal", "mode d'affichage : minimaliste <-> informatif")
 for i = 1, 4 do if row(i).scripts.OnEnter then row(i).scripts.OnEnter(row(i)) end end
 
 -- Barres de nom invisibles
-plates.nameplate1 = { UnitFrame = newObject() }
+local uf = newObject()
+uf.healthBar = newObject(); uf.name = newObject(); uf.border = newObject()
+uf.children = { uf.healthBar }; uf.regions = { uf.name, uf.border }; uf.name.parent = uf
+plates.nameplate1 = { UnitFrame = uf }
 ns.db.hiddenPlates = true
 ns.OnSettingsChanged()
 check(cvars.nameplateShowFriends == "1" and clickThrough == true, "barres invisibles : CVar + clic traversant")
-check(plates.nameplate1.UnitFrame.alpha == 0, "barres invisibles : barre existante masquée")
+check(uf.healthBar.alpha == 0 and uf.border.alpha == 0 and uf.name.alpha ~= 0 and uf.alpha ~= 0, "barres invisibles : barre masquée, nom visible")
 fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
-check(plates.nameplate1.UnitFrame.alpha == 1, "barre recyclée : visibilité rendue")
+check(uf.healthBar.alpha == 1 and uf.border.alpha == 1, "barre recyclée : visibilité rendue")
 fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
-check(plates.nameplate1.UnitFrame.alpha == 0, "nouvelle barre alliée masquée")
+check(uf.healthBar.alpha == 0 and uf.name.alpha ~= 0, "nouvelle barre alliée : barre masquée, nom visible")
 ns.db.hiddenPlates = false
 ns.OnSettingsChanged()
-check(plates.nameplate1.UnitFrame.alpha == 1 and clickThrough == false, "option coupée : barres restaurées")
+check(uf.healthBar.alpha == 1 and clickThrough == false, "option coupée : barres restaurées")
 
 -- Commandes
 printed = {}

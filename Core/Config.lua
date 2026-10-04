@@ -4,7 +4,7 @@ local _, ns = ...
 local Config = {}
 ns.Config = Config
 
-Config.DISPLAY_MODES = { "minimal", "info", "range" }
+Config.DISPLAY_MODES = { "minimal", "info" }
 
 local DEFAULTS = {
     groupBuffs = false,
@@ -47,6 +47,8 @@ function Config.Load(db, classData)
     for key, value in pairs(DEFAULTS) do
         if db[key] == nil then db[key] = value end
     end
+    -- L'ancien mode « range » (grisé hors portée) n'existe plus : les joueurs hors portée sont exclus.
+    if db.displayMode == "range" then db.displayMode = "info" end
     db.priorities = db.priorities or {}
     if classData then
         for _, cls in ipairs(ns.TARGET_CLASSES) do

@@ -53,10 +53,45 @@ end
 -- Scan
 ---------------------------------------------------------------------------
 
-local function buildRows()
+---------------------------------------------------------------------------
+-- Obstacles : WoW n'a pas d'API de ligne de vue. On repère l'erreur « pas en vue »
+-- qui suit un clic et on grise ce joueur quelques secondes.
+---------------------------------------------------------------------------
+
+local LOS_DURATION = 5    -- secondes pendant lesquelles le joueur reste grisé
+local CLICK_WINDOW = 1.0  -- délai max entre le clic et l'erreur
+local blockedUntil = {}   -- guid -> GetTime() de fin
+local lastClick
+
+function ns.NoteClick(guid)
+    lastClick = { guid = guid, time = GetTime() }
+end
+
+local function onUIError(arg1, arg2)
+    local message = type(arg2) == "string" and arg2 or arg1
+    if message ~= SPELL_FAILED_LINE_OF_SIGHT or not lastClick then return end
+    if GetTime() - lastClick.time > CLICK_WINDOW then return end
+    blockedUntil[lastClick.guid] = GetTime() + LOS_DURATION
+    lastClick = nil
+    ns.RequestScan()
+end
+
+local function isBlocked(guid, now)
+    local untilTime = blockedUntil[guid]
+    if not untilTime then return false end
+    if untilTime <= now then
+        blockedUntil[guid] = nil
+        return false
+    end
+    return true
+end
+
+-- stats (optionnel) : compte les joueurs écartés, pour /fb debug.
+local function buildRows(stats)
     local rows = {}
     if not ns.classData then return rows end
     local db = ns.db
+    local now = GetTime()
     for _, candidate in ipairs(ns.Scanner.Collect(db.includeStrangers)) do
         local priorities = db.priorities[candidate.class]
         if priorities then
@@ -69,11 +104,12 @@ local function buildRows()
                 isGroup = candidate.isGroup,
                 auras = ns.Auras.Read(candidate.unit),
             })
-            if need then
+            -- Hors de portée du sort : pas affiché (portée inconnue = affiché).
+            if need and ns.Compat.InRange(need.single.id, candidate.unit) == false then
+                if stats then stats.outOfRange = stats.outOfRange + 1 end
+            elseif need then
                 candidate.need = need
-                if db.displayMode == "range" then
-                    candidate.inRange = ns.Compat.InRange(need.single.id, candidate.unit)
-                end
+                candidate.blocked = isBlocked(candidate.guid, now)
                 rows[#rows + 1] = candidate
             end
         end
@@ -100,7 +136,7 @@ end
 -- Commandes
 ---------------------------------------------------------------------------
 
-local NAMEPLATE_HINT = "les joueurs hors groupe ne sont détectés que via les barres de nom alliées, actuellement désactivées : touche Maj+V ou /fb plaques."
+local NAMEPLATE_HINT = "les joueurs hors groupe ne sont détectés que via les barres de nom alliées, actuellement désactivées : touche Maj+V, /fb plaques, ou l'option « barres de nom alliées discrètes »."
 
 local function warnNameplates()
     if ns.db.includeStrangers and not ns.db.hiddenPlates and not ns.Compat.FriendlyNameplatesShown() then
@@ -129,8 +165,10 @@ local function debugScan()
     end
     local parts = {}
     for reason, count in pairs(rejected) do parts[#parts + 1] = reason .. "=" .. count end
-    say(string.format("scan : %d candidats (%d groupe, %d hors groupe), %d à buffer ; rejetés : %s",
-        #candidates, group, strangers, #buildRows(), #parts > 0 and table.concat(parts, ", ") or "aucun"))
+    local stats = { outOfRange = 0 }
+    local count = #buildRows(stats)
+    say(string.format("scan : %d candidats (%d groupe, %d hors groupe), %d à buffer, %d hors de portée ; rejetés : %s",
+        #candidates, group, strangers, count, stats.outOfRange, #parts > 0 and table.concat(parts, ", ") or "aucun"))
     say("inconnus inclus : " .. (ns.db.includeStrangers and "oui" or "non")
         .. " ; barres de nom alliées : " .. (ns.Compat.FriendlyNameplatesShown() and "activées" or "DÉSACTIVÉES")
         .. " ; fenêtre masquée par /fb : " .. (ns.db.hidden and "oui" or "non"))
@@ -200,7 +238,7 @@ local events = CreateFrame("Frame")
 local SCAN_EVENTS = {
     "UNIT_AURA", "GROUP_ROSTER_UPDATE", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
     "PLAYER_TARGET_CHANGED", "UNIT_LEVEL", "SPELLS_CHANGED", "PLAYER_ENTERING_WORLD", "UNIT_FLAGS",
-    "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED",
+    "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "UI_ERROR_MESSAGE",
 }
 
 local function onLogin()
@@ -232,13 +270,15 @@ local function onLogin()
 end
 
 events:RegisterEvent("PLAYER_LOGIN")
-events:SetScript("OnEvent", function(_, event, unit)
+events:SetScript("OnEvent", function(_, event, unit, arg2)
     if event == "PLAYER_LOGIN" then
         onLogin()
     elseif event == "PLAYER_REGEN_ENABLED" then
         ns.Nameplates.Apply()
         scan()
         ns.MainFrame.Flush()
+    elseif event == "UI_ERROR_MESSAGE" then
+        onUIError(unit, arg2)
     elseif event == "NAME_PLATE_UNIT_ADDED" then
         ns.Nameplates.Update(unit)
         ns.RequestScan()

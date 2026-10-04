@@ -4,7 +4,7 @@ local _, ns = ...
 local Options = {}
 ns.Options = Options
 
-local DISPLAY_LABELS = { minimal = "Minimaliste", info = "Informatif", range = "Informatif + portée" }
+local DISPLAY_LABELS = { minimal = "Minimaliste", info = "Informatif" }
 local MAX_ENTRIES = 6
 
 local panel, handle
@@ -169,7 +169,7 @@ function Options.Create()
     plates:SetScript("OnClick", function() ns.ToggleNameplates(); changed() end)
     refreshers[#refreshers + 1] = function() plates:SetChecked(ns.Compat.FriendlyNameplatesShown()) end
 
-    checkbox(panel, "Barres de nom alliées invisibles (actives pour l'addon, mais transparentes et non cliquables)", "hiddenPlates", 40, -138)
+    checkbox(panel, "Barres de nom alliées discrètes (seul le nom reste affiché, non cliquables)", "hiddenPlates", 40, -138)
     checkbox(panel, "Masquer la fenêtre quand personne n'a besoin de buff", "autoHide", 16, -164)
     checkbox(panel, "Verrouiller la position de la fenêtre", "locked", 16, -190)
 

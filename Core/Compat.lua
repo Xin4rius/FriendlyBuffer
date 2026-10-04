@@ -56,7 +56,9 @@ end
 -- true / false, ou nil si la portée ne peut pas être déterminée.
 function Compat.InRange(spellId, unit)
     if C_Spell and C_Spell.IsSpellInRange then
-        return C_Spell.IsSpellInRange(spellId, unit)
+        local inRange = C_Spell.IsSpellInRange(spellId, unit)
+        if Compat.IsSecret(inRange) then return nil end
+        return inRange
     end
     local name = Compat.GetSpellInfo(spellId)
     if not name or not IsSpellInRange then return nil end

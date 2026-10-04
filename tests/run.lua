@@ -246,5 +246,19 @@ test("Compare : urgence, groupe, nom", function()
     eq(rows[1].name, "Al"); eq(rows[2].name, "Bob"); eq(rows[3].name, "Zed")
 end)
 
+test("Compare : joueurs derrière un obstacle en dernier", function()
+    local rows = {
+        { name = "Al", isGroup = true, blocked = true, need = { reason = "missing" } },
+        { name = "Zed", isGroup = false, need = { reason = "lower" } },
+    }
+    table.sort(rows, ns.Decision.Compare)
+    eq(rows[1].name, "Zed"); eq(rows[2].name, "Al")
+end)
+
+test("Config.Load : ancien mode « range » converti", function()
+    local db = ns.Config.Load({ displayMode = "range" }, PRIEST)
+    eq(db.displayMode, "info")
+end)
+
 print(string.format("%d réussis, %d échoués", passed, failed))
 if failed > 0 then os.exit(1) end

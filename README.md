@@ -25,7 +25,7 @@ inférieur** à ce que vous pouvez lui poser (en tenant compte de son niveau).
 
 Joueurs hors groupe : WoW ne les rend visibles aux addons qu'à travers les **barres de nom
 alliées** (ou votre cible). Activez-les (Maj+V), ou cochez l'option « barres de nom alliées
-invisibles » : l'addon les active mais les rend transparentes et non cliquables. Le clic sur un
+discrètes » : l'addon les active mais n'en garde que le nom (comme sans Maj+V), non cliquables. Le clic sur un
 membre du groupe lance le buff sans changer votre cible ; pour un inconnu, l'addon le cible par
 « Prénom Nom », lance le buff puis rétablit votre cible (si le ciblage échoue, rien n'est lancé). Les inconnus marqués JcJ sont ignorés si vous ne l'êtes pas.
 
@@ -33,10 +33,18 @@ En combat, la liste est figée (restriction de WoW sur les boutons de sort) mais
 cliquable ; elle est reconstruite à la sortie du combat. Elle ne se réordonne pas non plus
 tant que le curseur est sur la fenêtre, pour éviter de cliquer sur le mauvais joueur.
 
+## Liste
+
+- Les joueurs **hors de portée** du sort ne sont pas affichés.
+- **Obstacle** : WoW ne permet pas de savoir à l'avance si un joueur est hors de vue. Si un clic
+  échoue avec « La cible n'est pas en vue », la ligne est grisée (« obstacle ») et placée en bas
+  pendant 5 secondes.
+- **Alt + clic gauche** : sélectionne le joueur au lieu de le buffer.
+
 ## Options
 
 Buffs de groupe (clic gauche groupe / clic droit individuel), inclure les inconnus, masquage
-automatique, verrouillage, mode d'affichage (minimaliste, informatif, informatif + portée),
+automatique, verrouillage, mode d'affichage (minimaliste, informatif),
 nombre de lignes, seuils « expire bientôt », et priorités des buffs par classe de cible.
 
 ## Tests hors jeu

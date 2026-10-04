@@ -8,7 +8,7 @@ ns.MainFrame = MainFrame
 local ROW_HEIGHT = 18
 local TITLE_HEIGHT = 20
 local PADDING = 6
-local WIDTH = { minimal = 150, info = 210, range = 210 }
+local WIDTH = { minimal = 150, info = 210 }
 local MAX_ROWS_LIMIT = 20
 
 local REASON_COLORS = {
@@ -17,6 +17,7 @@ local REASON_COLORS = {
     lower = { 1, 0.9, 0.2 },
 }
 local REASON_LABELS = { missing = "manquant", expiring = "expire", lower = "rang inf." }
+local BLOCKED_COLOR = { 0.6, 0.6, 0.6 }
 
 local frame, buttons = nil, {}
 local pending = false     -- une reconstruction complète attend la fin du combat / du survol
@@ -39,7 +40,7 @@ end
 ---------------------------------------------------------------------------
 
 local function clearAttributes(button)
-    for _, attr in ipairs({ "type1", "type2", "macrotext1", "macrotext2" }) do
+    for _, attr in ipairs({ "type1", "type2", "macrotext1", "macrotext2", "alt-type1", "alt-macrotext1" }) do
         button:SetAttribute(attr, nil)
     end
 end
@@ -70,6 +71,9 @@ local function applyMacros(button, row, restore)
     button:SetAttribute("macrotext1", left)
     button:SetAttribute("type2", "macro")
     button:SetAttribute("macrotext2", right)
+    -- Alt+clic gauche : sélectionner le joueur au lieu de le buffer.
+    button:SetAttribute("alt-type1", "macro")
+    button:SetAttribute("alt-macrotext1", row.isGroup and ("/target " .. button.unit) or ("/targetexact " .. row.name))
 end
 
 local function assign(button, row)
@@ -119,8 +123,15 @@ local function paint(button, row, done)
         local _, icon = ns.Compat.GetSpellInfo(row.need.single.id)
         button.icon:SetTexture(icon)
         button.name:SetPoint("LEFT", button.icon, "RIGHT", 4, 0)
-        button.reason:SetText(done and "OK" or reasonText(row.need))
-        local c = done and { 0.4, 1, 0.4 } or REASON_COLORS[row.need.reason]
+        local text, c
+        if done then
+            text, c = "OK", { 0.4, 1, 0.4 }
+        elseif row.blocked then
+            text, c = "obstacle", BLOCKED_COLOR
+        else
+            text, c = reasonText(row.need), REASON_COLORS[row.need.reason]
+        end
+        button.reason:SetText(text)
         button.reason:SetTextColor(c[1], c[2], c[3])
     else
         button.name:SetPoint("LEFT", button, "LEFT", 2, 0)
@@ -130,7 +141,7 @@ local function paint(button, row, done)
     local alpha = 1
     if done then
         alpha = 0.35
-    elseif mode == "range" and row.inRange == false then
+    elseif row.blocked then
         alpha = 0.45
     end
     button:SetAlpha(alpha)
@@ -156,7 +167,9 @@ local function onEnter(button)
         else
             GameTooltip:AddLine("Clic : " .. ns.SpellLabel(row.need.single), 1, 1, 1)
         end
+        GameTooltip:AddLine("Alt+clic gauche : sélectionner", 1, 1, 1)
         if not row.isGroup then GameTooltip:AddLine("Hors groupe : ciblé par son nom puis cible précédente rétablie", 0.6, 0.6, 0.6) end
+        if row.blocked then GameTooltip:AddLine("Derrière un obstacle au dernier essai", 0.6, 0.6, 0.6) end
     end
     GameTooltip:Show()
 end
@@ -186,6 +199,10 @@ local function createButton(index)
     button.reason:SetJustifyH("RIGHT")
 
     button:SetScript("PreClick", onPreClick)
+    -- Mémorise le joueur cliqué : une erreur « pas en vue » juste après le concerne.
+    button:SetScript("PostClick", function(self)
+        if self.row and not self.done and not IsAltKeyDown() then ns.NoteClick(self.row.guid) end
+    end)
     button:SetScript("OnEnter", onEnter)
     button:SetScript("OnLeave", GameTooltip_Hide)
     button:Hide()

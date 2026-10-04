@@ -123,8 +123,9 @@ function Decision.Evaluate(classData, ctx, target)
     return evaluateCumulative(classData, ctx, target)
 end
 
--- Tri des lignes : urgence, puis groupe avant inconnus, puis nom.
+-- Tri des lignes : joueurs derrière un obstacle en dernier, puis urgence, groupe avant inconnus, nom.
 function Decision.Compare(a, b)
+    if (a.blocked or false) ~= (b.blocked or false) then return not a.blocked end
     local ua, ub = Decision.URGENCY[a.need.reason], Decision.URGENCY[b.need.reason]
     if ua ~= ub then return ua < ub end
     if a.isGroup ~= b.isGroup then return a.isGroup end
