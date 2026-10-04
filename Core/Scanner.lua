@@ -1,6 +1,8 @@
 -- Liste des joueurs candidats : groupe/raid, puis inconnus visibles (barres de nom, cible, survol).
 local _, ns = ...
 
+local L = ns.L
+
 local Scanner = {}
 ns.Scanner = Scanner
 
@@ -31,13 +33,13 @@ end
 -- Retourne true, ou false + raison du rejet (pour /fb debug).
 local function isCandidate(unit, isGroup)
     if not UnitExists(unit) then return false, nil end
-    if not UnitIsPlayer(unit) then return false, "pnj" end
-    if not UnitIsConnected(unit) or UnitIsDeadOrGhost(unit) then return false, "mort/déco" end
-    if not UnitCanAssist("player", unit) then return false, "non assistable" end
+    if not UnitIsPlayer(unit) then return false, L["NPC"] end
+    if not UnitIsConnected(unit) or UnitIsDeadOrGhost(unit) then return false, L["dead/offline"] end
+    if not UnitCanAssist("player", unit) then return false, L["not assistable"] end
     if not isGroup then
         if UnitInParty(unit) or UnitInRaid(unit) or UnitIsUnit(unit, "player") then return false, nil end
         -- Ne pas se faire marquer JcJ en buffant un inconnu marqué.
-        if UnitIsPVP(unit) and not UnitIsPVP("player") then return false, "JcJ" end
+        if UnitIsPVP(unit) and not UnitIsPVP("player") then return false, L["PvP"] end
     end
     return true
 end
@@ -65,7 +67,7 @@ function Scanner.Collect(includeStrangers)
         if not guid or seen[guid] then return end
         local name = fullName(unit)
         if not name then
-            rejected["nom secret"] = (rejected["nom secret"] or 0) + 1
+            rejected[L["secret name"]] = (rejected[L["secret name"]] or 0) + 1
             return
         end
         seen[guid] = true

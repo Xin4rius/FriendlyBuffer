@@ -1,10 +1,12 @@
 -- Panneau d'options : général, seuils, priorités par classe de cible.
 local _, ns = ...
 
+local L = ns.L
+
 local Options = {}
 ns.Options = Options
 
-local DISPLAY_LABELS = { minimal = "Minimaliste", info = "Informatif" }
+local DISPLAY_LABELS = { minimal = L["Minimal"], info = L["Detailed"] }
 local MAX_ENTRIES = 6
 
 local panel, handle
@@ -109,11 +111,11 @@ local function familyLabel(key)
 end
 
 local function buildPriorities(parent, y)
-    local header = label(parent, "Priorités par classe de cible", "GameFontNormalLarge")
+    local header = label(parent, L["Priorities by target class"], "GameFontNormalLarge")
     header:SetPoint("TOPLEFT", 16, y)
 
     if not ns.classData then
-        local none = label(parent, "Votre classe n'a aucun buff géré par FriendlyBuffer.", "GameFontDisable")
+        local none = label(parent, L["Your class has no buff supported by FriendlyBuffer."], "GameFontDisable")
         none:SetPoint("TOPLEFT", 16, y - 28)
         return
     end
@@ -131,7 +133,7 @@ local function buildPriorities(parent, y)
             end
         end, 180)
     classSelector:SetPoint("TOPLEFT", 16, y - 26)
-    local reset = smallButton(parent, "Réinitialiser", 110, function()
+    local reset = smallButton(parent, L["Reset"], 110, function()
         ns.Config.ResetPriorities(ns.db, ns.classData, classes[selectedClass])
         changed()
     end)
@@ -146,9 +148,9 @@ local function buildPriorities(parent, y)
         text:SetPoint("LEFT", cb, "RIGHT", 2, 1)
         text:SetWidth(220)
         text:SetJustifyH("LEFT")
-        local up = smallButton(parent, "Haut", 50, nil)
+        local up = smallButton(parent, L["Up"], 50, nil)
         up:SetPoint("TOPLEFT", 270, rowY - 3)
-        local down = smallButton(parent, "Bas", 50, nil)
+        local down = smallButton(parent, L["Down"], 50, nil)
         down:SetPoint("LEFT", up, "RIGHT", 4, 0)
         rows[i] = { cb = cb, text = text, up = up, down = down }
 
@@ -203,36 +205,36 @@ function Options.Create()
 
     local title = label(content, "FriendlyBuffer", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 16, -16)
-    local sub = label(content, "Liste les joueurs proches à buffer ; cliquez sur un nom pour lancer le buff (Alt + clic : sélectionner).", "GameFontHighlightSmall")
+    local sub = label(content, L["Lists nearby players to buff; click a name to cast the buff (Alt + click: select)."], "GameFontHighlightSmall")
     sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
 
-    checkbox(content, "Utiliser les buffs de groupe / supérieurs (clic gauche, membres du groupe)", "groupBuffs", 16, -60)
-    checkbox(content, "Inclure les joueurs hors groupe (barres de nom alliées, cible)", "includeStrangers", 16, -86)
+    checkbox(content, L["Use group / greater buffs (left click, group members)"], "groupBuffs", 16, -60)
+    checkbox(content, L["Include players outside your group (friendly nameplates, target)"], "includeStrangers", 16, -86)
     local plates = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
     plates:SetPoint("TOPLEFT", 40, -112)
-    label(content, "Afficher les barres de nom alliées (nécessaire pour détecter les inconnus)"):SetPoint("LEFT", plates, "RIGHT", 2, 1)
+    label(content, L["Show friendly nameplates (required to detect strangers)"]):SetPoint("LEFT", plates, "RIGHT", 2, 1)
     plates:SetScript("OnClick", function() ns.ToggleNameplates(); changed() end)
     refreshers[#refreshers + 1] = function() plates:SetChecked(ns.Compat.FriendlyNameplatesShown()) end
 
-    checkbox(content, "Barres de nom alliées discrètes (seul le nom reste affiché, non cliquables)", "hiddenPlates", 40, -138)
-    checkbox(content, "Masquer la fenêtre quand personne n'a besoin de buff", "autoHide", 16, -164)
-    checkbox(content, "Verrouiller la position de la fenêtre", "locked", 16, -190)
+    checkbox(content, L["Discreet friendly nameplates (only the name is shown, click-through)"], "hiddenPlates", 40, -138)
+    checkbox(content, L["Hide the window when nobody needs a buff"], "autoHide", 16, -164)
+    checkbox(content, L["Lock the window position"], "locked", 16, -190)
 
     local modes = {}
     for _, mode in ipairs(ns.Config.DISPLAY_MODES) do modes[#modes + 1] = { key = mode, label = DISPLAY_LABELS[mode] } end
-    choice(content, "Mode d'affichage", "displayMode", modes, 20, -226)
+    choice(content, L["Display mode"], "displayMode", modes, 20, -226)
 
-    stepper(content, "Nombre de lignes maximum", "maxRows", 20, -256, 1, 1, 20, "%d")
-    stepper(content, "Expire bientôt (buffs de 5/10 min)", "thresholdShort", 20, -282, 15, 15, 300, "%d s")
-    stepper(content, "Expire bientôt (buffs 30/60 min)", "thresholdLong", 20, -308, 30, 30, 900, "%d s")
+    stepper(content, L["Maximum number of rows"], "maxRows", 20, -256, 1, 1, 20, "%d")
+    stepper(content, L["Expiring soon (5/10 min buffs)"], "thresholdShort", 20, -282, 15, 15, 300, "%d s")
+    stepper(content, L["Expiring soon (30/60 min buffs)"], "thresholdLong", 20, -308, 30, 30, 900, "%d s")
 
-    local namesHeader = label(content, "Noms des barres de nom discrètes", "GameFontNormalLarge")
+    local namesHeader = label(content, L["Names on discreet nameplates"], "GameFontNormalLarge")
     namesHeader:SetPoint("TOPLEFT", 16, -348)
-    choice(content, "Police", "plateFont", ns.Config.PLATE_FONTS, 20, -378)
-    choice(content, "Contour", "plateOutline", ns.Config.PLATE_OUTLINES, 20, -408)
-    stepper(content, "Taille", "plateFontSize", 20, -436, 1, 8, 24, "%d")
-    checkbox(content, "Ombre", "plateShadow", 16, -458)
-    checkbox(content, "Afficher la guilde sous le nom", "plateGuild", 16, -484)
+    choice(content, L["Font"], "plateFont", ns.Config.PLATE_FONTS, 20, -378)
+    choice(content, L["Outline"], "plateOutline", ns.Config.PLATE_OUTLINES, 20, -408)
+    stepper(content, L["Size"], "plateFontSize", 20, -436, 1, 8, 24, "%d")
+    checkbox(content, L["Shadow"], "plateShadow", 16, -458)
+    checkbox(content, L["Show the guild under the name"], "plateGuild", 16, -484)
 
     buildPriorities(content, -530)
 

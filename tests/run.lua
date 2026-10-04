@@ -1,6 +1,7 @@
 -- Tests hors jeu : lancer depuis la racine de l'addon avec `lua tests/run.lua`.
+GetLocale = function() return "enUS" end
 local ns = {}
-for _, file in ipairs({ "Data/Spells.lua", "Core/Decision.lua", "Core/Auras.lua", "Core/Config.lua" }) do
+for _, file in ipairs({ "Locales/Locale.lua", "Data/Spells.lua", "Core/Decision.lua", "Core/Auras.lua", "Core/Config.lua" }) do
     assert(loadfile(file))("FriendlyBuffer", ns)
 end
 
@@ -263,6 +264,44 @@ end)
 test("Config.Load : ancien mode « range » converti", function()
     local db = ns.Config.Load({ displayMode = "range" }, PRIEST)
     eq(db.displayMode, "info")
+end)
+
+-- Traductions --------------------------------------------------------------
+
+local SOURCES = { "FriendlyBuffer.lua", "Core/Config.lua", "Core/Scanner.lua", "UI/MainFrame.lua", "UI/Options.lua", "UI/Nameplates.lua" }
+local LOCALES = { frFR = "frFR", deDE = "deDE", esES = "esES", esMX = "esES", itIT = "itIT", ptBR = "ptBR",
+    ruRU = "ruRU", koKR = "koKR", zhCN = "zhCN", zhTW = "zhTW" }
+
+local usedKeys = {}
+for _, file in ipairs(SOURCES) do
+    local src = assert(io.open(file)):read("*a")
+    for key in src:gmatch('L%["(.-)"%]') do usedKeys[key] = true end
+end
+
+for locale, file in pairs(LOCALES) do
+    test("Traduction " .. locale .. " : complète et sans clé inutile", function()
+        GetLocale = function() return locale end
+        local lns = {}
+        assert(loadfile("Locales/Locale.lua"))("FriendlyBuffer", lns)
+        assert(loadfile("Locales/" .. file .. ".lua"))("FriendlyBuffer", lns)
+        local translated = rawget(lns, "L")
+        for key in pairs(usedKeys) do
+            if rawget(translated, key) == nil then error("clé non traduite : " .. key) end
+        end
+        for key, value in pairs(translated) do
+            if not usedKeys[key] then error("clé inutilisée : " .. key) end
+            -- Mêmes %s / %d dans le même ordre que l'anglais (string.format n'est pas positionnel).
+            if key:gsub("[^%%]", ""):len() > 0 then
+                local function specs(s) local out = {} for spec in s:gmatch("%%[sd]") do out[#out + 1] = spec end return table.concat(out) end
+                if specs(key) ~= specs(value) then error("formats différents pour : " .. key) end
+            end
+        end
+    end)
+end
+GetLocale = function() return "enUS" end
+
+test("Langue non traduite : texte anglais", function()
+    eq(ns.L["Reset"], "Reset")
 end)
 
 print(string.format("%d réussis, %d échoués", passed, failed))

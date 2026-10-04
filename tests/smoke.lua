@@ -77,6 +77,7 @@ _G.GameTooltip_Hide = noop
 _G.SlashCmdList = {}
 _G.strtrim = function(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
 _G.GetTime = function() return now end
+_G.GetLocale = function() return "frFR" end
 _G.InCombatLockdown = function() return inCombat end
 _G.IsInRaid = function() return false end
 _G.IsInGroup = function() return true end

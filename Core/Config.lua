@@ -1,6 +1,8 @@
 -- Réglages : valeurs par défaut et fusion avec la sauvegarde par personnage.
 local _, ns = ...
 
+local L = ns.L
+
 local Config = {}
 ns.Config = Config
 
@@ -14,9 +16,9 @@ Config.PLATE_FONTS = {
     { key = "morpheus", label = "Morpheus", path = "Fonts\\MORPHEUS.TTF" },
 }
 Config.PLATE_OUTLINES = {
-    { key = "none", label = "Aucun", flags = "" },
-    { key = "thin", label = "Fin", flags = "OUTLINE" },
-    { key = "thick", label = "Épais", flags = "THICKOUTLINE" },
+    { key = "none", label = L["None"], flags = "" },
+    { key = "thin", label = L["Thin"], flags = "OUTLINE" },
+    { key = "thick", label = L["Thick"], flags = "THICKOUTLINE" },
 }
 
 function Config.Find(list, key)

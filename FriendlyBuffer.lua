@@ -1,5 +1,6 @@
 -- Initialisation, événements, scan et commandes.
 local ADDON, ns = ...
+local L = ns.L
 
 local PREFIX = "|cff33ccffFriendlyBuffer|r : "
 local SCAN_THROTTLE = 0.2   -- délai minimum entre deux scans déclenchés par événement
@@ -45,7 +46,7 @@ local function indexSpellNames()
         end
     end
     if #missing > 0 then
-        say("sorts inconnus de ce client, ignorés : " .. table.concat(missing, ", "))
+        say(string.format(L["unknown spells on this client, ignored: %s"], table.concat(missing, ", ")))
     end
 end
 
@@ -137,7 +138,7 @@ end
 -- Commandes
 ---------------------------------------------------------------------------
 
-local NAMEPLATE_HINT = "les joueurs hors groupe ne sont détectés que via les barres de nom alliées, actuellement désactivées : touche Maj+V, /fb plaques, ou l'option « barres de nom alliées discrètes »."
+local NAMEPLATE_HINT = L["players outside your group can only be detected through friendly nameplates, which are disabled: press Shift+V, type /fb plates, or enable the 'discreet friendly nameplates' option."]
 
 local function warnNameplates()
     if ns.db.includeStrangers and not ns.db.hiddenPlates and not ns.Compat.FriendlyNameplatesShown() then
@@ -147,12 +148,12 @@ end
 
 local function toggleNameplates()
     if InCombatLockdown() then
-        say("impossible pendant le combat.")
+        say(L["not possible during combat."])
         return
     end
     local shown = not ns.Compat.FriendlyNameplatesShown()
     ns.Compat.SetFriendlyNameplates(shown)
-    say(shown and "barres de nom alliées activées." or "barres de nom alliées désactivées.")
+    say(shown and L["friendly nameplates enabled."] or L["friendly nameplates disabled."])
     ns.RequestScan()
 end
 ns.ToggleNameplates = toggleNameplates
@@ -168,25 +169,27 @@ local function debugScan()
     for reason, count in pairs(rejected) do parts[#parts + 1] = reason .. "=" .. count end
     local stats = { outOfRange = 0 }
     local count = #buildRows(stats)
-    say(string.format("scan : %d candidats (%d groupe, %d hors groupe), %d à buffer, %d hors de portée ; rejetés : %s",
-        #candidates, group, strangers, count, stats.outOfRange, #parts > 0 and table.concat(parts, ", ") or "aucun"))
-    say("inconnus inclus : " .. (ns.db.includeStrangers and "oui" or "non")
-        .. " ; barres de nom alliées : " .. (ns.Compat.FriendlyNameplatesShown() and "activées" or "DÉSACTIVÉES")
-        .. " ; fenêtre masquée par /fb : " .. (ns.db.hidden and "oui" or "non"))
+    say(string.format(L["scan: %d candidates (%d in group, %d outside), %d to buff, %d out of range; rejected: %s"],
+        #candidates, group, strangers, count, stats.outOfRange, #parts > 0 and table.concat(parts, ", ") or L["none"]))
+    local function yesNo(value) return value and L["yes"] or L["no"] end
+    say(string.format(L["strangers included: %s; friendly nameplates: %s; window hidden by /fb: %s"],
+        yesNo(ns.db.includeStrangers),
+        ns.Compat.FriendlyNameplatesShown() and L["enabled"] or L["DISABLED"],
+        yesNo(ns.db.hidden)))
 end
 
 local function debugTarget()
     local unit = UnitExists("target") and "target" or "player"
     local _, class = UnitClass(unit)
-    say("analyse de " .. (UnitName(unit) or "?") .. " (" .. tostring(class) .. ", niveau " .. UnitLevel(unit) .. ")")
+    say(string.format(L["analysis of %s (%s, level %s)"], UnitName(unit) or "?", tostring(class), tostring(UnitLevel(unit))))
     for _, raw in ipairs(ns.Compat.GetBuffs(unit)) do
         local info = raw.spellId and ns.SpellIndex[raw.spellId]
-        print(string.format("  %s [%s] source=%s durée=%s fin=%s %s", tostring(raw.name), tostring(raw.spellId),
+        print(string.format("  %s [%s] source=%s duration=%s expiration=%s %s", tostring(raw.name), tostring(raw.spellId),
             tostring(raw.sourceUnit), tostring(raw.duration), tostring(raw.expirationTime),
-            info and ("-> " .. info.family .. " puissance " .. info.power) or ""))
+            info and ("-> " .. info.family .. " power " .. info.power) or ""))
     end
     if not ns.classData then
-        say("votre classe n'a aucun buff géré.")
+        say(L["your class has no supported buff."])
         return
     end
     debugScan()
@@ -194,20 +197,20 @@ local function debugTarget()
         isKnown = ns.Compat.IsKnown, settings = ns.db, priorities = ns.db.priorities[class],
     }, { level = UnitLevel(unit), isGroup = UnitInParty(unit) or UnitInRaid(unit) or UnitIsUnit(unit, "player"), auras = ns.Auras.Read(unit) })
     if need then
-        say(string.format("décision : %s (%s)%s", ns.SpellLabel(need.single), need.reason,
-            need.group and (" / groupe : " .. ns.SpellLabel(need.group)) or ""))
+        say(string.format(L["decision: %s (%s)"], ns.SpellLabel(need.single), ns.MainFrame.ReasonLabel(need.reason))
+            .. (need.group and string.format(L[" / group: %s"], ns.SpellLabel(need.group)) or ""))
     else
-        say("décision : rien à faire.")
+        say(L["decision: nothing to do."])
     end
 end
 
 local function toggleWindow()
     if InCombatLockdown() then
-        say("impossible pendant le combat.")
+        say(L["not possible during combat."])
         return
     end
     ns.db.hidden = not ns.db.hidden
-    say(ns.db.hidden and "fenêtre masquée (/fb pour la réafficher)." or "fenêtre affichée.")
+    say(ns.db.hidden and L["window hidden (/fb to show it again)."] or L["window shown."])
     scan()
 end
 
@@ -223,10 +226,10 @@ SlashCmdList.FRIENDLYBUFFER = function(input)
         debugTarget()
     elseif cmd == "reset" then
         ns.MainFrame.ResetPosition()
-    elseif cmd == "plaques" or cmd == "nameplates" then
+    elseif cmd == "plates" or cmd == "plaques" or cmd == "nameplates" then
         toggleNameplates()
     else
-        say("/fb (afficher/masquer), /fb options, /fb debug (analyse la cible), /fb plaques (barres de nom alliées), /fb reset (position)")
+        say(L["/fb (show/hide), /fb options, /fb debug (analyze your target), /fb plates (friendly nameplates), /fb reset (position)"])
     end
 end
 
@@ -254,10 +257,10 @@ local function onLogin()
     ns.Options.Create()
 
     if not ns.classData then
-        say("votre classe n'a aucun buff géré ; l'addon reste inactif.")
+        say(L["your class has no supported buff; the addon stays inactive."])
         return
     end
-    say("chargé (" .. (UnitClass("player")) .. "). /fb options pour les réglages, /fb debug en cas de souci.")
+    say(string.format(L["loaded (%s). /fb options for settings, /fb debug if something is wrong."], (UnitClass("player"))))
     ns.Nameplates.Apply()
     warnNameplates()
 

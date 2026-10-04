@@ -45,8 +45,15 @@ tant que le curseur est sur la fenêtre, pour éviter de cliquer sur le mauvais 
 
 Buffs de groupe (clic gauche groupe / clic droit individuel), inclure les inconnus, masquage
 automatique, verrouillage, mode d'affichage (minimaliste, informatif), apparence des noms des
-barres discrètes (police, contour, taille, ombre ; par défaut comme les noms de WoW sans Maj+V),
+barres discrètes (police, contour, taille, ombre, guilde sous le nom ; par défaut comme les noms de
+WoW sans Maj+V, avec polices de secours pour le chinois, le coréen et le cyrillique),
 nombre de lignes, seuils « expire bientôt », et priorités des buffs par classe de cible.
+
+## Langues
+
+Anglais (par défaut), français, allemand, espagnol (Espagne et Mexique), italien, portugais (Brésil),
+russe, coréen, chinois simplifié et traditionnel. Les traductions sont dans `Locales/` ; la clé de
+chaque texte est sa version anglaise.
 
 ## Tests hors jeu
 

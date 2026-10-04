@@ -1,10 +1,30 @@
 ## Interface: 16001
 ## Title: FriendlyBuffer
-## Notes: Liste les joueurs proches à buffer ; un clic sur le nom lance le bon buff.
+## Notes: Lists nearby players who need one of your buffs; click a name to cast the right one.
+## Notes-frFR: Liste les joueurs proches à buffer ; un clic sur le nom lance le bon buff.
+## Notes-deDE: Listet Spieler in der Nähe auf, die einen deiner Buffs brauchen; ein Klick auf den Namen wirkt den richtigen.
+## Notes-esES: Muestra los jugadores cercanos que necesitan uno de tus beneficios; haz clic en un nombre para lanzar el adecuado.
+## Notes-esMX: Muestra los jugadores cercanos que necesitan uno de tus beneficios; haz clic en un nombre para lanzar el adecuado.
+## Notes-itIT: Elenca i giocatori vicini a cui serve un tuo potenziamento; clicca sul nome per lanciare quello giusto.
+## Notes-ptBR: Lista os jogadores próximos que precisam de um dos seus bônus; clique no nome para lançar o certo.
+## Notes-ruRU: Показывает игроков поблизости, которым нужен ваш бафф; нажмите на имя, чтобы наложить нужный.
+## Notes-koKR: 버프가 필요한 주변 플레이어를 보여주고, 이름을 클릭하면 알맞은 버프를 시전합니다.
+## Notes-zhCN: 列出附近需要你的增益的玩家；点击名字即可施放合适的增益。
+## Notes-zhTW: 列出附近需要你的增益的玩家；點擊名字即可施放合適的增益。
 ## Author: Xin4rius
-## Version: 1.0.0
+## Version: 1.1.0
 ## SavedVariablesPerCharacter: FriendlyBufferCharDB
 
+Locales\Locale.lua
+Locales\frFR.lua
+Locales\deDE.lua
+Locales\esES.lua
+Locales\itIT.lua
+Locales\ptBR.lua
+Locales\ruRU.lua
+Locales\koKR.lua
+Locales\zhCN.lua
+Locales\zhTW.lua
 Data\Spells.lua
 Core\Compat.lua
 Core\Config.lua

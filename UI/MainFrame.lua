@@ -1,6 +1,7 @@
 -- Fenêtre principale : pool de boutons sécurisés, un par joueur à buffer.
 -- Les attributs sécurisés ne peuvent changer qu'hors combat ; en combat on ne met à jour que l'affichage.
 local _, ns = ...
+local L = ns.L
 
 local MainFrame = {}
 ns.MainFrame = MainFrame
@@ -16,7 +17,7 @@ local REASON_COLORS = {
     expiring = { 1, 0.6, 0.1 },
     lower = { 1, 0.9, 0.2 },
 }
-local REASON_LABELS = { missing = "manquant", expiring = "expire", lower = "rang inf." }
+local REASON_LABELS = { missing = L["missing"], expiring = L["expiring"], lower = L["lower rank"] }
 local BLOCKED_COLOR = { 0.6, 0.6, 0.6 }
 
 local frame, buttons = nil, {}
@@ -29,6 +30,8 @@ local function formatTime(seconds)
     if seconds >= 60 then return string.format("%d:%02d", seconds / 60, seconds % 60) end
     return seconds .. "s"
 end
+
+function MainFrame.ReasonLabel(reason) return REASON_LABELS[reason] or reason end
 
 local function reasonText(need)
     if need.reason == "expiring" and need.remaining then return formatTime(need.remaining) end
@@ -102,7 +105,7 @@ local function onPreClick(button)
     else
         clearAttributes(button)
         button.done = true
-        ns.Print(row.name .. " n'est plus visible.")
+        ns.Print(string.format(L["%s is no longer visible."], row.name))
     end
 end
 ---------------------------------------------------------------------------
@@ -127,7 +130,7 @@ local function paint(button, row, done)
         if done then
             text, c = "OK", { 0.4, 1, 0.4 }
         elseif row.blocked then
-            text, c = "obstacle", BLOCKED_COLOR
+            text, c = L["obstacle"], BLOCKED_COLOR
         else
             text, c = reasonText(row.need), REASON_COLORS[row.need.reason]
         end
@@ -153,23 +156,23 @@ local function onEnter(button)
     GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
     GameTooltip:AddLine(row.name, ns.Compat.ClassColor(row.class))
     if button.done then
-        GameTooltip:AddLine("Plus besoin de buff", 0.4, 1, 0.4)
+        GameTooltip:AddLine(L["No buff needed anymore"], 0.4, 1, 0.4)
     else
         local c = REASON_COLORS[row.need.reason]
         local reason = REASON_LABELS[row.need.reason]
-        if row.need.reason == "expiring" then reason = "expire dans " .. formatTime(row.need.remaining) end
+        if row.need.reason == "expiring" then reason = string.format(L["expires in %s"], formatTime(row.need.remaining)) end
         GameTooltip:AddLine(ns.SpellLabel(row.need.single) .. " : " .. reason, c[1], c[2], c[3])
         if row.isGroup and row.need.group then
             local reagent = row.need.group.reagent or ns.Spells[ns.playerClass].families[row.need.family].reagent
             local count = reagent and ns.Compat.ItemCount(reagent) or 0
-            GameTooltip:AddLine("Clic gauche : " .. ns.SpellLabel(row.need.group) .. " (composants : " .. count .. ")", 1, 1, 1)
-            GameTooltip:AddLine("Clic droit : " .. ns.SpellLabel(row.need.single), 1, 1, 1)
+            GameTooltip:AddLine(string.format(L["Left click: %s (reagents: %d)"], ns.SpellLabel(row.need.group), count), 1, 1, 1)
+            GameTooltip:AddLine(string.format(L["Right click: %s"], ns.SpellLabel(row.need.single)), 1, 1, 1)
         else
-            GameTooltip:AddLine("Clic : " .. ns.SpellLabel(row.need.single), 1, 1, 1)
+            GameTooltip:AddLine(string.format(L["Click: %s"], ns.SpellLabel(row.need.single)), 1, 1, 1)
         end
-        GameTooltip:AddLine("Alt+clic gauche : sélectionner", 1, 1, 1)
-        if not row.isGroup then GameTooltip:AddLine("Hors groupe : ciblé par son nom puis cible précédente rétablie", 0.6, 0.6, 0.6) end
-        if row.blocked then GameTooltip:AddLine("Derrière un obstacle au dernier essai", 0.6, 0.6, 0.6) end
+        GameTooltip:AddLine(L["Alt + left click: select"], 1, 1, 1)
+        if not row.isGroup then GameTooltip:AddLine(L["Outside your group: targeted by name, then your previous target is restored"], 0.6, 0.6, 0.6) end
+        if row.blocked then GameTooltip:AddLine(L["Behind an obstacle on the last attempt"], 0.6, 0.6, 0.6) end
     end
     GameTooltip:Show()
 end
@@ -211,8 +214,8 @@ end
 
 local function updateTitle(total)
     local text = "FriendlyBuffer"
-    if total > 0 then text = text .. "  |cffffffff" .. total .. " à buffer|r" end
-    if InCombatLockdown() then text = text .. "  |cffff4040(combat)|r" end
+    if total > 0 then text = text .. "  |cffffffff" .. string.format(L["%d to buff"], total) .. "|r" end
+    if InCombatLockdown() then text = text .. "  |cffff4040" .. L["(combat)"] .. "|r" end
     frame.title:SetText(text)
 end
 
