@@ -39,14 +39,21 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     needs: test
     runs-on: ubuntu-latest
-    env:
-      TAG: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
       # Historique complet : le packager lit les tags pour la version et le changelog.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag || github.ref_name }}
           fetch-depth: 0
+
+      # Tag poussé, ou tag saisi au lancement manuel. Choisi en shell : le runner évalue mal
+      # les expressions « a || b ».
+      - name: Select tag
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          TAG="${INPUT_TAG:-$GITHUB_REF_NAME}"
+          git checkout -q "refs/tags/$TAG"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
 
       - name: Install packager dependencies
         run: |
@@ -54,11 +61,10 @@ jobs:
           $SUDO apt-get update -qq
           $SUDO apt-get install -y -qq jq zip unzip subversion
 
-      # -d : construit le zip (.pkgmeta, @project-version@) sans rien envoyer.
+      # Script du packager lancé directement : act_runner ne sait pas résoudre le tag « v2 » de
+      # l'action BigWigsMods/packager. -d : construit le zip (.pkgmeta, @project-version@) sans envoi.
       - name: Build package
-        uses: BigWigsMods/packager@v2
-        with:
-          args: -d
+        run: curl -fsSL https://raw.githubusercontent.com/BigWigsMods/packager/v2/release.sh | bash -s -- -d
 
       - name: Create Gitea release
         env:
