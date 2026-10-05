@@ -64,7 +64,7 @@ local units = {
     nameplate1 = { name = "Valeera", surname = "Sanguinar", class = "ROGUE", level = 58, guid = "G3", buffs = {}, stranger = true },
     nameplate3 = { name = "Loin", class = "WARRIOR", level = 60, guid = "G7", buffs = {}, stranger = true, far = true },
 }
-local function U(unit) return units[unit] end
+local function U(unit) local u = units[unit]; if u and not u.hidden then return u end end
 
 _G.CreateFrame = function(_, name)
     local o = newObject(name)
@@ -187,6 +187,18 @@ check(row(4).row.name == "Valeera Sanguinar" and row(4).row.blocked == true and 
 now = now + 6
 tick()
 check(row(4).row.blocked ~= true and row(4).alpha == 1, "obstacle : levé après quelques secondes")
+
+-- Clic sur Valeera puis elle sort de portée / de vue sans avoir reçu le buff -> pas « OK »
+row(4).scripts.PostClick(row(4), "LeftButton")
+units.nameplate1.far = true
+tick()
+check(row(4).shown == false, "sortie de portée après un clic : pas affichée « OK »")
+units.nameplate1.far, units.nameplate1.hidden = nil, true
+tick()
+check(row(4).shown == false, "barre de nom disparue après un clic : pas affichée « OK »")
+units.nameplate1.hidden = nil
+tick()
+check(row(4).row.name == "Valeera Sanguinar" and row(4).done ~= true, "de retour, toujours à buffer")
 
 -- PreClick sans cible -> on ne revient pas à une ancienne cible
 row(4).scripts.PreClick(row(4), "LeftButton")

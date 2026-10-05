@@ -77,11 +77,13 @@ function ns.NoteClick(row)
 end
 
 -- Lignes « OK » à afficher sous `rows` (les joueurs qui ont encore besoin d'un buff).
-local function doneRows(rows, now)
+-- `satisfied` : GUIDs vus pendant le scan et qui n'ont plus besoin de rien. Un joueur qui sort
+-- simplement de la liste (hors de portée, barre de nom disparue) n'est pas « OK ».
+local function doneRows(rows, satisfied, now)
     local needed = {}
     for _, row in ipairs(rows) do needed[row.guid] = true end
     for guid, click in pairs(recentClicks) do
-        if not needed[guid] then
+        if satisfied[guid] then
             if ns.db.doneDuration > 0 then doneUntil[guid] = { untilTime = now + ns.db.doneDuration, row = click.row } end
             recentClicks[guid] = nil
         elseif now - click.time > CLICK_WATCH then
@@ -122,9 +124,10 @@ local function isBlocked(guid, now)
 end
 
 -- stats (optionnel) : compte les joueurs écartés, pour /fb debug.
+-- Retourne aussi les GUIDs des joueurs vus qui n'ont besoin de rien.
 local function buildRows(stats)
-    local rows = {}
-    if not ns.classData then return rows end
+    local rows, satisfied = {}, {}
+    if not ns.classData then return rows, satisfied end
     local db = ns.db
     local now = GetTime()
     for _, candidate in ipairs(ns.Scanner.Collect(db.includeStrangers)) do
@@ -146,19 +149,21 @@ local function buildRows(stats)
                 candidate.need = need
                 candidate.blocked = isBlocked(candidate.guid, now)
                 rows[#rows + 1] = candidate
+            else
+                satisfied[candidate.guid] = true
             end
         end
     end
     table.sort(rows, ns.Decision.Compare)
-    return rows
+    return rows, satisfied
 end
 
 local dirty, sinceScan, sinceTick = true, 0, 0
 
 local function scan()
     dirty, sinceScan, sinceTick = false, 0, 0
-    local rows = buildRows()
-    ns.MainFrame.Render(rows, doneRows(rows, GetTime()))
+    local rows, satisfied = buildRows()
+    ns.MainFrame.Render(rows, doneRows(rows, satisfied, GetTime()))
     if ns.db.hiddenPlates then ns.Nameplates.Refresh() end
 end
 
