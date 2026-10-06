@@ -35,6 +35,7 @@ local DEFAULTS = {
     locked = false,
     maxRows = 10,
     includeStrangers = true,
+    detectSpecs = true,     -- inspecte les joueurs pour connaître leur spé
     hiddenPlates = false,
     -- Par défaut : aspect des noms de WoW sans Maj+V.
     plateFont = "friz",
@@ -80,13 +81,14 @@ function Config.Load(db, classData)
     if db.displayMode == "range" then db.displayMode = "info" end
     db.priorities = db.priorities or {}
     if classData then
-        for _, cls in ipairs(ns.TARGET_CLASSES) do
-            db.priorities[cls] = Config.MergePriorities(db.priorities[cls], classData.defaults[cls], classData.families)
+        -- Les priorités sauvegardées par classe (versions sans spé) restent celles du profil « spé inconnue ».
+        for _, profile in ipairs(ns.TARGET_PROFILES) do
+            db.priorities[profile] = Config.MergePriorities(db.priorities[profile], classData.defaults[profile], classData.families)
         end
     end
     return db
 end
 
-function Config.ResetPriorities(db, classData, targetClass)
-    db.priorities[targetClass] = copyList(classData.defaults[targetClass])
+function Config.ResetPriorities(db, classData, profile)
+    db.priorities[profile] = copyList(classData.defaults[profile])
 end

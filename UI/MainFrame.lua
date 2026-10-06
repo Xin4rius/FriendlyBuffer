@@ -158,6 +158,8 @@ local function onEnter(button)
     if not row then return end
     GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
     GameTooltip:AddLine(row.name, ns.Compat.ClassColor(row.class))
+    local spec = row.profile and ns.Specs.SpecLabel(row.profile)
+    if spec then GameTooltip:AddLine(spec, 0.8, 0.8, 0.8) end
     if button.done then
         GameTooltip:AddLine(L["No buff needed anymore"], 0.4, 1, 0.4)
     else

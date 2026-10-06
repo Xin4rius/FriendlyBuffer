@@ -131,7 +131,8 @@ local function buildRows(stats)
     local db = ns.db
     local now = GetTime()
     for _, candidate in ipairs(ns.Scanner.Collect(db.includeStrangers)) do
-        local priorities = db.priorities[candidate.class]
+        candidate.profile = ns.Specs.ProfileFor(candidate)
+        local priorities = db.priorities[candidate.profile]
         if priorities then
             local need = ns.Decision.Evaluate(ns.classData, {
                 isKnown = ns.Compat.IsKnown,
@@ -165,6 +166,7 @@ local function scan()
     local rows, satisfied = buildRows()
     ns.MainFrame.Render(rows, doneRows(rows, satisfied, GetTime()))
     if ns.db.hiddenPlates then ns.Nameplates.Refresh() end
+    ns.Specs.Update()
 end
 
 function ns.RequestScan() dirty = true end
@@ -233,8 +235,10 @@ local function debugTarget()
         return
     end
     debugScan()
+    local profile = ns.Specs.ProfileFor({ unit = unit, guid = UnitGUID(unit), class = class, level = UnitLevel(unit) })
+    say(string.format(L["priorities used: %s"], ns.Specs.Label(profile)))
     local need = ns.Decision.Evaluate(ns.classData, {
-        isKnown = ns.Compat.IsKnown, settings = ns.db, priorities = ns.db.priorities[class],
+        isKnown = ns.Compat.IsKnown, settings = ns.db, priorities = ns.db.priorities[profile],
     }, { level = UnitLevel(unit), isGroup = UnitInParty(unit) or UnitInRaid(unit) or UnitIsUnit(unit, "player"), auras = ns.Auras.Read(unit) })
     if need then
         say(string.format(L["decision: %s (%s)"], ns.SpellLabel(need.single), ns.MainFrame.ReasonLabel(need.reason))
@@ -282,7 +286,8 @@ local events = CreateFrame("Frame")
 local SCAN_EVENTS = {
     "UNIT_AURA", "GROUP_ROSTER_UPDATE", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
     "PLAYER_TARGET_CHANGED", "UNIT_LEVEL", "SPELLS_CHANGED", "PLAYER_ENTERING_WORLD", "UNIT_FLAGS",
-    "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "UI_ERROR_MESSAGE",
+    "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "UI_ERROR_MESSAGE", "INSPECT_READY",
+    "CHARACTER_POINTS_CHANGED",
 }
 
 local function onLogin()
@@ -291,6 +296,7 @@ local function onLogin()
     ns.classData = ns.Spells[class]
     FriendlyBufferCharDB = FriendlyBufferCharDB or {}
     ns.db = ns.Config.Load(FriendlyBufferCharDB, ns.classData)
+    ns.Specs.Init(ns.db)
 
     indexSpellNames()
     ns.MainFrame.Create()
@@ -305,6 +311,8 @@ local function onLogin()
     warnNameplates()
 
     for _, event in ipairs(SCAN_EVENTS) do events:RegisterEvent(event) end
+    -- Nos propres inspections passent aussi par là : sans conséquence (simple délai).
+    if NotifyInspect then hooksecurefunc("NotifyInspect", ns.Specs.OnForeignInspect) end
     events:SetScript("OnUpdate", function(_, elapsed)
         sinceScan = sinceScan + elapsed
         sinceTick = sinceTick + elapsed
@@ -323,6 +331,8 @@ events:SetScript("OnEvent", function(_, event, unit, arg2)
         ns.MainFrame.Flush()
     elseif event == "UI_ERROR_MESSAGE" then
         onUIError(unit, arg2)
+    elseif event == "INSPECT_READY" then
+        ns.Specs.OnInspectReady(unit)
     elseif event == "NAME_PLATE_UNIT_ADDED" then
         ns.Nameplates.Update(unit)
         ns.RequestScan()

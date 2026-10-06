@@ -1,4 +1,4 @@
--- Panneau d'options : général, seuils, priorités par classe de cible.
+-- Panneau d'options : général, seuils, priorités par classe et spé de cible.
 local _, ns = ...
 
 local L = ns.L
@@ -11,7 +11,7 @@ local MAX_ENTRIES = 6
 
 local panel, handle
 local refreshers = {}
-local selectedClass = 1
+local selectedProfile = 1
 
 local function changed()
     for _, refresh in ipairs(refreshers) do refresh() end
@@ -123,7 +123,7 @@ local function familyLabel(key)
 end
 
 local function buildPriorities(parent, y)
-    local header = label(parent, L["Priorities by target class"], "GameFontNormalLarge")
+    local header = label(parent, L["Priorities by target class and spec"], "GameFontNormalLarge")
     header:SetPoint("TOPLEFT", 16, y)
 
     if not ns.classData then
@@ -132,24 +132,27 @@ local function buildPriorities(parent, y)
         return
     end
 
-    local classes = ns.TARGET_CLASSES
-    local classList = {}
-    for _, cls in ipairs(classes) do
-        classList[#classList + 1] = { key = cls, label = (LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[cls]) or cls }
+    checkbox(parent, L["Detect the spec of players (inspection, out of combat)"], "detectSpecs", 16, y - 24)
+    y = y - 30
+
+    local profiles = ns.TARGET_PROFILES
+    local profileList = {}
+    for _, key in ipairs(profiles) do
+        profileList[#profileList + 1] = { key = key, label = ns.Specs.Label(key) }
     end
-    local classSelector = selector(parent, classList,
-        function() return classes[selectedClass] end,
+    local profileSelector = selector(parent, profileList,
+        function() return profiles[selectedProfile] end,
         function(value)
-            for i, cls in ipairs(classes) do
-                if cls == value then selectedClass = i end
+            for i, key in ipairs(profiles) do
+                if key == value then selectedProfile = i end
             end
-        end, 180)
-    classSelector:SetPoint("TOPLEFT", 16, y - 26)
+        end, 240)
+    profileSelector:SetPoint("TOPLEFT", 16, y - 26)
     local reset = smallButton(parent, L["Reset"], 110, function()
-        ns.Config.ResetPriorities(ns.db, ns.classData, classes[selectedClass])
+        ns.Config.ResetPriorities(ns.db, ns.classData, profiles[selectedProfile])
         changed()
     end)
-    reset:SetPoint("LEFT", classSelector, "RIGHT", 16, 0)
+    reset:SetPoint("LEFT", profileSelector, "RIGHT", 16, 0)
 
     local rows = {}
     for i = 1, MAX_ENTRIES do
@@ -166,7 +169,7 @@ local function buildPriorities(parent, y)
         down:SetPoint("LEFT", up, "RIGHT", 4, 0)
         rows[i] = { cb = cb, text = text, up = up, down = down }
 
-        local function list() return ns.db.priorities[classes[selectedClass]] end
+        local function list() return ns.db.priorities[profiles[selectedProfile]] end
         local function swap(a, b)
             local l = list()
             l[a], l[b] = l[b], l[a]
@@ -183,8 +186,7 @@ local function buildPriorities(parent, y)
     end
 
     refreshers[#refreshers + 1] = function()
-        local cls = classes[selectedClass]
-        local list = ns.db.priorities[cls]
+        local list = ns.db.priorities[profiles[selectedProfile]]
         for i, row in ipairs(rows) do
             local entry = list[i]
             local visible = entry ~= nil
@@ -200,7 +202,7 @@ local function buildPriorities(parent, y)
     end
 end
 
-local CONTENT_WIDTH, CONTENT_HEIGHT = 640, 830
+local CONTENT_WIDTH, CONTENT_HEIGHT = 640, 860
 
 function Options.Create()
     panel = CreateFrame("Frame")

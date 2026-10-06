@@ -1,7 +1,7 @@
 -- Tests hors jeu : lancer depuis la racine de l'addon avec `lua tests/run.lua`.
 GetLocale = function() return "enUS" end
 local ns = {}
-for _, file in ipairs({ "Locales/Locale.lua", "Data/Spells.lua", "Core/Decision.lua", "Core/Auras.lua", "Core/Config.lua" }) do
+for _, file in ipairs({ "Locales/Locale.lua", "Data/Spells.lua", "Core/Decision.lua", "Core/Auras.lua", "Core/Config.lua", "Core/Specs.lua" }) do
     assert(loadfile(file))("FriendlyBuffer", ns)
 end
 
@@ -266,9 +266,95 @@ test("Config.Load : ancien mode « range » converti", function()
     eq(db.displayMode, "info")
 end)
 
+-- Spécialisations ------------------------------------------------------------
+
+test("MainTab : arbre le plus rempli", function()
+    eq(ns.Specs.MainTab({ 31, 20, 0 }), 1)
+    eq(ns.Specs.MainTab({ 5, 30, 16 }), 2)
+    eq(ns.Specs.MainTab({ 10, 10, 0 }), 1, "égalité : le premier")
+    eq(ns.Specs.MainTab({ 0, 0, 0 }), nil, "aucun talent")
+    eq(ns.Specs.MainTab({}), nil, "talents illisibles")
+end)
+
+test("Profile : classe hybride, arbre connu ou non", function()
+    eq(ns.Specs.Profile("SHAMAN", 2), "SHAMAN_ENHANCEMENT")
+    eq(ns.Specs.Profile("DRUID", 2), "DRUID_FERAL")
+    eq(ns.Specs.Profile("SHAMAN", nil), "SHAMAN")
+    eq(ns.Specs.Profile("MAGE", 1), "MAGE", "classe sans profils de spé")
+end)
+
+test("Spé moderne : gardien = farouche", function()
+    eq(ns.Specs.Profile("DRUID", ns.Specs.SPEC_ID_TAB[104]), "DRUID_FERAL")
+end)
+
+test("Label : classe, spé, spé inconnue", function()
+    eq(ns.Specs.Label("SHAMAN_ENHANCEMENT"), "SHAMAN - Enhancement")
+    eq(ns.Specs.Label("SHAMAN"), "SHAMAN (spec unknown)")
+    eq(ns.Specs.Label("MAGE"), "MAGE")
+end)
+
+test("Chaque classe de buff a des priorités pour chaque profil, avec toutes ses familles", function()
+    for class, data in pairs(ns.Spells) do
+        local count = 0
+        for _ in pairs(data.families) do count = count + 1 end
+        for _, profile in ipairs(ns.TARGET_PROFILES) do
+            local list = data.defaults[profile]
+            if not list then error(class .. " : pas de priorités pour " .. profile) end
+            eq(#list, count, class .. " / " .. profile)
+        end
+    end
+end)
+
+test("Paladin : chaman amélioration -> puissance avant sagesse", function()
+    local need = ns.Decision.Evaluate(PALADIN, ctxFor("PALADIN", "SHAMAN_ENHANCEMENT"), { level = 60, auras = {} })
+    eq(need.family, "might")
+end)
+
+test("Paladin : chaman élémentaire ou spé inconnue -> sagesse", function()
+    eq(ns.Decision.Evaluate(PALADIN, ctxFor("PALADIN", "SHAMAN_ELEMENTAL"), { level = 60, auras = {} }).family, "wisdom")
+    eq(ns.Decision.Evaluate(PALADIN, ctxFor("PALADIN", "SHAMAN"), { level = 60, auras = {} }).family, "wisdom")
+end)
+
+test("Paladin : guerrier fureur reçoit le salut, guerrier protection jamais", function()
+    local auras = { aura("might", 7), aura("kings", 1) }
+    eq(ns.Decision.Evaluate(PALADIN, ctxFor("PALADIN", "WARRIOR_FURY"), { level = 60, auras = auras }).family, "salvation")
+    eq(ns.Decision.Evaluate(PALADIN, ctxFor("PALADIN", "WARRIOR_PROTECTION"), { level = 60, auras = auras }).family, "light")
+end)
+
+test("Paladin : druide farouche -> puissance, pas de salut", function()
+    eq(ns.Decision.Evaluate(PALADIN, ctxFor("PALADIN", "DRUID_FERAL"), { level = 60, auras = {} }).family, "might")
+    local auras = { aura("might", 7), aura("kings", 1), aura("light", 3) }
+    eq(ns.Decision.Evaluate(PALADIN, ctxFor("PALADIN", "DRUID_FERAL"), { level = 60, auras = auras }), nil)
+end)
+
+test("Paladin : paladin vindicte -> puissance, sacré -> sagesse", function()
+    eq(ns.Decision.Evaluate(PALADIN, ctxFor("PALADIN", "PALADIN_RETRIBUTION"), { level = 60, auras = {} }).family, "might")
+    eq(ns.Decision.Evaluate(PALADIN, ctxFor("PALADIN", "PALADIN_HOLY"), { level = 60, auras = {} }).family, "wisdom")
+end)
+
+test("Prêtre : esprit pour le chaman amélioration, pas pour le druide farouche", function()
+    local fort = { aura("fortitude", 6, { remaining = 1500, duration = 1800 }) }
+    eq(ns.Decision.Evaluate(PRIEST, ctxFor("PRIEST", "SHAMAN_ENHANCEMENT"), { level = 60, auras = fort }).family, "spirit")
+    eq(ns.Decision.Evaluate(PRIEST, ctxFor("PRIEST", "DRUID_FERAL"), { level = 60, auras = fort }), nil)
+end)
+
+test("Druide : épines sur paladin protection, pas sur paladin sacré", function()
+    local mark = { aura("mark", 7, { remaining = 1500, duration = 1800 }) }
+    eq(ns.Decision.Evaluate(ns.Spells.DRUID, ctxFor("DRUID", "PALADIN_PROTECTION"), { level = 60, auras = mark }).family, "thorns")
+    eq(ns.Decision.Evaluate(ns.Spells.DRUID, ctxFor("DRUID", "PALADIN_HOLY"), { level = 60, auras = mark }), nil)
+end)
+
+test("Config.Load : priorités par classe sauvegardées gardées pour la spé inconnue", function()
+    local saved = { priorities = { SHAMAN = { { key = "light", enabled = true } } } }
+    local db = ns.Config.Load(saved, PALADIN)
+    eq(db.priorities.SHAMAN[1].key, "light", "réglage conservé")
+    eq(db.priorities.SHAMAN_ENHANCEMENT[1].key, "might", "nouveau profil : défauts")
+    eq(db.detectSpecs, true)
+end)
+
 -- Traductions --------------------------------------------------------------
 
-local SOURCES = { "FriendlyBuffer.lua", "Core/Config.lua", "Core/Scanner.lua", "UI/MainFrame.lua", "UI/Options.lua", "UI/Nameplates.lua" }
+local SOURCES = { "FriendlyBuffer.lua", "Core/Config.lua", "Core/Scanner.lua", "Core/Specs.lua", "UI/MainFrame.lua", "UI/Options.lua", "UI/Nameplates.lua" }
 local LOCALES = { frFR = "frFR", deDE = "deDE", esES = "esES", esMX = "esES", itIT = "itIT", ptBR = "ptBR",
     ruRU = "ruRU", koKR = "koKR", zhCN = "zhCN", zhTW = "zhTW" }
 

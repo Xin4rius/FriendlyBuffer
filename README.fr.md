@@ -44,6 +44,16 @@ jamais au-dessus.
 En combat, la liste est figée (WoW interdit aux addons de modifier les boutons de sort en combat)
 mais reste cliquable ; elle est reconstruite à la sortie du combat.
 
+## Spécialisations
+
+Pour les classes hybrides (guerrier, paladin, chaman, druide), le buff dépend de la spé : un chaman
+Amélioration reçoit Puissance plutôt que Sagesse, un guerrier Fureur reçoit le Salut mais jamais un
+guerrier Protection, un druide farouche n'a pas d'Esprit divin, etc. La spé (l'arbre de talents le
+plus rempli) est lue en **inspectant** le joueur : une inspection à la fois, hors combat, à portée
+d'inspection, jamais quand votre fenêtre d'inspection est ouverte. Elle est mémorisée et vérifiée
+une fois par session. Tant qu'elle est inconnue, les priorités « spé inconnue » de la classe
+s'appliquent. L'infobulle d'une ligne indique la spé détectée.
+
 ## La liste
 
 - Les joueurs **hors de portée** du sort ne sont pas affichés.
@@ -63,7 +73,8 @@ mais reste cliquable ; elle est reconstruite à la sortie du combat.
 - Noms des barres discrètes : police, contour, taille, ombre, guilde sous le nom. Par défaut, ils
   ressemblent aux noms de WoW sans Maj+V, avec des polices de secours pour les noms chinois, coréens
   et cyrilliques.
-- Priorités des buffs par classe de cible : réordonner, activer ou désactiver chaque buff
+- Détection de la spé des joueurs (inspection), activée par défaut
+- Priorités des buffs par classe et spé de cible : réordonner, activer ou désactiver chaque buff
 
 ## Langues
 

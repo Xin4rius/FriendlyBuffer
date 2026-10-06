@@ -57,8 +57,8 @@ function methods:GetParent() return rawget(self, "parent") end
 local inCombat = false
 local now = 1000
 local units = {
-    player  = { name = "Moi", class = "PRIEST", level = 60, guid = "G0", buffs = {} },
-    party1  = { name = "Garrosh", class = "WARRIOR", level = 60, guid = "G1", buffs = {} },
+    player  = { name = "Moi", class = "PRIEST", level = 60, guid = "G0", buffs = {}, talents = { 0, 21, 30 } },
+    party1  = { name = "Garrosh", class = "WARRIOR", level = 60, guid = "G1", buffs = {}, talents = { 17, 34, 0 } },
     party2  = { name = "Jaina", class = "MAGE", level = 60, guid = "G2",
                 buffs = { { spellId = 10938, name = "Robustesse", sourceUnit = "player", duration = 1800, expirationTime = 2500 } } },
     nameplate1 = { name = "Valeera", surname = "Sanguinar", class = "ROGUE", level = 58, guid = "G3", buffs = {}, stranger = true },
@@ -117,6 +117,17 @@ _G.C_Spell = {
     IsSpellInRange = function(_, u) return not (U(u) and U(u).far) end,
 }
 _G.C_Item = { GetItemCount = function() return 5 end }
+_G.time = function() return 1700000000 end
+_G.UnitIsVisible = function(u) return U(u) ~= nil end
+_G.CanInspect = function(u) return U(u) ~= nil end
+_G.CheckInteractDistance = function(u) return U(u) ~= nil and not U(u).far end
+local inspectRequests, inspected = {}, nil
+_G.NotifyInspect = function(u) inspectRequests[#inspectRequests + 1] = u; inspected = U(u) end
+_G.ClearInspectPlayer = function() inspected = nil end
+_G.GetTalentTabInfo = function(tab, isInspect)
+    local u = isInspect and inspected or units.player
+    return "Arbre" .. tab, "icone", u and u.talents and u.talents[tab] or 0
+end
 _G.RAID_CLASS_COLORS = setmetatable({}, { __index = function() return { r = 1, g = 1, b = 1 } end })
 _G.LOCALIZED_CLASS_NAMES_MALE = {}
 local cvars = { nameplateShowFriends = "0" }
@@ -178,6 +189,18 @@ check(row(4).attrs.type1 == "macro" and row(4).attrs.macrotext1 == STRANGER .. "
 check(FriendlyBufferFrame.shown, "fenêtre visible")
 check(row(1).attrs["alt-type1"] == "macro" and row(1).attrs["alt-macrotext1"] == "/target party1", "Alt+clic : sélectionne un membre du groupe")
 check(row(4).attrs["alt-macrotext1"] == "/targetexact Valeera Sanguinar", "Alt+clic : sélectionne un inconnu")
+
+-- Spé : seul le guerrier du groupe est inspecté (le mage et le voleur n'ont pas de spé utile,
+-- l'autre guerrier est trop loin), puis mémorisé.
+check(#inspectRequests == 1 and inspectRequests[1] == "party1", "inspection du guerrier du groupe")
+check(row(1).row.profile == "WARRIOR", "spé pas encore connue : profil de la classe")
+fire("INSPECT_READY", "G1")
+tick()
+check(ns.db.specs.G1 and ns.db.specs.G1.tab == 2 and inspected == nil, "spé lue (Fureur) et inspection libérée")
+check(row(1).row.profile == "WARRIOR_FURY", "profil Fureur appliqué")
+now = now + 5
+tick()
+check(#inspectRequests == 1, "pas de nouvelle inspection une fois la spé connue")
 
 -- Obstacle : clic sur Valeera puis erreur « pas en vue » -> grisée et en bas de liste
 row(4).scripts.PostClick(row(4), "LeftButton")
@@ -313,6 +336,7 @@ ns.OnSettingsChanged()check(uf.healthBar.alpha == 1 and uf.name.alpha == 1 and o
 printed = {}
 SlashCmdList.FRIENDLYBUFFER("debug")
 check(printedMatch("candidats"), "/fb debug affiche le bilan du scan")
+check(printedMatch("priorités utilisées : PRIEST"), "/fb debug affiche le profil utilisé")
 cvars.nameplateShowFriends = "0"
 SlashCmdList.FRIENDLYBUFFER("plaques")
 check(cvars.nameplateShowFriends == "1", "/fb plaques active les barres de nom alliées")

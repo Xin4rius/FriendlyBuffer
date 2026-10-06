@@ -43,6 +43,16 @@ bottom, never above.
 In combat the list is frozen (WoW does not let addons change spell buttons in combat) but stays
 clickable; it is rebuilt when combat ends.
 
+## Specializations
+
+For hybrid classes (warrior, paladin, shaman, druid) the buff depends on the spec: an Enhancement
+shaman gets Might rather than Wisdom, a Fury warrior gets Salvation but a Protection warrior never
+does, a Feral druid gets no Divine Spirit, and so on. The spec (the talent tree with the most
+points) is read by **inspecting** the player: one inspection at a time, out of combat, within
+inspect range, never while your own inspect window is open. It is remembered and checked again once
+per session. Until it is known, the class's "spec unknown" priorities apply. A row's tooltip shows
+the detected spec.
+
 ## The list
 
 - Players **out of range** of the spell are not shown.
@@ -60,7 +70,8 @@ clickable; it is rebuilt when combat ends.
 - How long buffed players stay shown as OK (5 s by default, 0 to hide them right away)
 - Names on discreet nameplates: font, outline, size, shadow, guild under the name. Defaults look
   like WoW names without Shift+V, with fallback fonts for Chinese, Korean and Cyrillic names.
-- Buff priorities per target class: reorder, enable or disable each buff
+- Spec detection by inspection, on by default
+- Buff priorities per target class and spec: reorder, enable or disable each buff
 
 ## Languages
 

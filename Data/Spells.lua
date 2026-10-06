@@ -3,51 +3,75 @@
 -- (power = rang individuel équivalent), durées en secondes, composant de la version groupe.
 local _, ns = ...
 
-local TARGET_CLASSES = { "WARRIOR", "ROGUE", "HUNTER", "MAGE", "WARLOCK", "PRIEST", "DRUID", "SHAMAN", "PALADIN" }
-ns.TARGET_CLASSES = TARGET_CLASSES
+-- Profils de cible : la classe seule (spé inconnue), puis, pour les classes hybrides, un profil
+-- par arbre de talents (tab = index de l'arbre). Pour chaque profil : utilise la mana (esprit,
+-- intelligence), reçoit des coups (épines), bénédictions par ordre de priorité.
+local PROFILES = {
+    { key = "WARRIOR",             class = "WARRIOR", thorns = true, blessings = { "might", "kings", "light" } },
+    { key = "WARRIOR_ARMS",        class = "WARRIOR", tab = 1, thorns = true, blessings = { "might", "kings", "salvation", "light" } },
+    { key = "WARRIOR_FURY",        class = "WARRIOR", tab = 2, thorns = true, blessings = { "might", "kings", "salvation", "light" } },
+    { key = "WARRIOR_PROTECTION",  class = "WARRIOR", tab = 3, thorns = true, blessings = { "kings", "might", "light", "sanctuary" } },
+    { key = "ROGUE",               class = "ROGUE", blessings = { "might", "kings", "salvation", "light" } },
+    { key = "HUNTER",              class = "HUNTER", mana = true, blessings = { "wisdom", "kings", "salvation", "might" } },
+    { key = "MAGE",                class = "MAGE", mana = true, blessings = { "wisdom", "kings", "salvation", "light" } },
+    { key = "WARLOCK",             class = "WARLOCK", mana = true, blessings = { "wisdom", "kings", "salvation", "light" } },
+    { key = "PRIEST",              class = "PRIEST", mana = true, blessings = { "wisdom", "kings", "salvation", "light" } },
+    { key = "DRUID",               class = "DRUID", mana = true, blessings = { "wisdom", "kings", "salvation", "might" } },
+    { key = "DRUID_BALANCE",       class = "DRUID", tab = 1, mana = true, blessings = { "wisdom", "kings", "salvation", "light" } },
+    -- Farouche : peut tanker en ours, donc pas de salut par défaut.
+    { key = "DRUID_FERAL",         class = "DRUID", tab = 2, thorns = true, blessings = { "might", "kings", "light" } },
+    { key = "DRUID_RESTORATION",   class = "DRUID", tab = 3, mana = true, blessings = { "wisdom", "kings", "salvation", "light" } },
+    { key = "SHAMAN",              class = "SHAMAN", mana = true, blessings = { "wisdom", "kings", "salvation", "might" } },
+    { key = "SHAMAN_ELEMENTAL",    class = "SHAMAN", tab = 1, mana = true, blessings = { "wisdom", "kings", "salvation", "light" } },
+    { key = "SHAMAN_ENHANCEMENT",  class = "SHAMAN", tab = 2, mana = true, blessings = { "might", "kings", "salvation", "wisdom" } },
+    { key = "SHAMAN_RESTORATION",  class = "SHAMAN", tab = 3, mana = true, blessings = { "wisdom", "kings", "salvation", "light" } },
+    { key = "PALADIN",             class = "PALADIN", mana = true, blessings = { "wisdom", "kings", "might", "light" } },
+    { key = "PALADIN_HOLY",        class = "PALADIN", tab = 1, mana = true, blessings = { "wisdom", "kings", "salvation", "light" } },
+    { key = "PALADIN_PROTECTION",  class = "PALADIN", tab = 2, mana = true, thorns = true, blessings = { "kings", "wisdom", "light", "sanctuary" } },
+    { key = "PALADIN_RETRIBUTION", class = "PALADIN", tab = 3, mana = true, blessings = { "might", "kings", "salvation", "wisdom" } },
+}
 
-local MANA_CLASSES = { HUNTER = true, MAGE = true, WARLOCK = true, PRIEST = true, DRUID = true, SHAMAN = true, PALADIN = true }
+ns.TARGET_PROFILES = {}       -- clés dans l'ordre d'affichage
+ns.PROFILES = {}              -- clé -> profil
+ns.SPEC_PROFILES = {}         -- classe -> { [arbre] = clé } (classes hybrides seulement)
+for _, profile in ipairs(PROFILES) do
+    ns.TARGET_PROFILES[#ns.TARGET_PROFILES + 1] = profile.key
+    ns.PROFILES[profile.key] = profile
+    if profile.tab then
+        ns.SPEC_PROFILES[profile.class] = ns.SPEC_PROFILES[profile.class] or {}
+        ns.SPEC_PROFILES[profile.class][profile.tab] = profile.key
+    end
+end
 
--- Construit une liste de priorités identique pour toutes les classes de cible.
--- enabledFor(targetClass, key) -> booléen
+-- Construit une liste de priorités identique (même ordre) pour tous les profils.
+-- enabledFor(profile, key) -> booléen
 local function uniformPriorities(order, enabledFor)
     local result = {}
-    for _, cls in ipairs(TARGET_CLASSES) do
+    for _, profile in ipairs(PROFILES) do
         local list = {}
         for _, key in ipairs(order) do
-            list[#list + 1] = { key = key, enabled = enabledFor(cls, key) }
+            list[#list + 1] = { key = key, enabled = enabledFor(profile, key) }
         end
-        result[cls] = list
+        result[profile.key] = list
     end
     return result
 end
 
--- Paladin : ordre explicite par classe de cible ; les familles non citées sont ajoutées désactivées.
+-- Paladin : ordre explicite par profil ; les familles non citées sont ajoutées désactivées.
 local PALADIN_ALL = { "might", "wisdom", "kings", "salvation", "light", "sanctuary" }
-local PALADIN_ORDER = {
-    WARRIOR = { "might", "kings", "light" },
-    ROGUE   = { "might", "kings", "salvation", "light" },
-    HUNTER  = { "wisdom", "kings", "salvation", "might" },
-    MAGE    = { "wisdom", "kings", "salvation", "light" },
-    WARLOCK = { "wisdom", "kings", "salvation", "light" },
-    PRIEST  = { "wisdom", "kings", "salvation", "light" },
-    DRUID   = { "wisdom", "kings", "salvation", "might" },
-    SHAMAN  = { "wisdom", "kings", "salvation", "might" },
-    PALADIN = { "wisdom", "kings", "might", "light" },
-}
 
 local function paladinPriorities()
     local result = {}
-    for _, cls in ipairs(TARGET_CLASSES) do
+    for _, profile in ipairs(PROFILES) do
         local list, seen = {}, {}
-        for _, key in ipairs(PALADIN_ORDER[cls]) do
+        for _, key in ipairs(profile.blessings) do
             list[#list + 1] = { key = key, enabled = true }
             seen[key] = true
         end
         for _, key in ipairs(PALADIN_ALL) do
             if not seen[key] then list[#list + 1] = { key = key, enabled = false } end
         end
-        result[cls] = list
+        result[profile.key] = list
     end
     return result
 end
@@ -114,9 +138,9 @@ ns.Spells = {
                 duration = 600, groupDuration = 1200, reagent = 17029,
             },
         },
-        defaults = uniformPriorities({ "fortitude", "spirit", "shadowprot" }, function(cls, key)
+        defaults = uniformPriorities({ "fortitude", "spirit", "shadowprot" }, function(profile, key)
             if key == "fortitude" then return true end
-            if key == "spirit" then return MANA_CLASSES[cls] == true end
+            if key == "spirit" then return profile.mana == true end
             return false
         end),
     },
@@ -138,8 +162,8 @@ ns.Spells = {
                 duration = 600,
             },
         },
-        defaults = uniformPriorities({ "intellect", "amplify", "dampen" }, function(cls, key)
-            return key == "intellect" and MANA_CLASSES[cls] == true
+        defaults = uniformPriorities({ "intellect", "amplify", "dampen" }, function(profile, key)
+            return key == "intellect" and profile.mana == true
         end),
     },
 
@@ -156,9 +180,9 @@ ns.Spells = {
                 duration = 600,
             },
         },
-        defaults = uniformPriorities({ "mark", "thorns" }, function(cls, key)
+        defaults = uniformPriorities({ "mark", "thorns" }, function(profile, key)
             if key == "mark" then return true end
-            return cls == "WARRIOR"
+            return profile.thorns == true
         end),
     },
 }

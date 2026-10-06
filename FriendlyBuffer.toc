@@ -32,6 +32,7 @@ Core\Config.lua
 Core\Auras.lua
 Core\Decision.lua
 Core\Scanner.lua
+Core\Specs.lua
 UI\MainFrame.lua
 UI\Nameplates.lua
 UI\Options.lua

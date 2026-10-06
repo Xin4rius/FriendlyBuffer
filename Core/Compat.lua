@@ -103,6 +103,52 @@ function Compat.SetFriendlyClickThrough(enabled)
     end
 end
 
+-- Points dépensés dans chacun des 3 arbres de talents (les siens, ou ceux du joueur inspecté).
+-- GetTalentTabInfo : « nom, icône, points » (Classic) ou « id, nom, description, icône, points ».
+function Compat.TalentPoints(isInspect)
+    local points = {}
+    if not GetTalentTabInfo then return points end
+    for tab = 1, 3 do
+        local _, _, third, _, fifth = GetTalentTabInfo(tab, isInspect)
+        local count = type(third) == "number" and third or fifth
+        if type(count) ~= "number" or Compat.IsSecret(count) then return {} end
+        points[tab] = count
+    end
+    return points
+end
+
+-- Spécialisation moderne (identifiant), si le client en a une ; sinon nil.
+function Compat.OwnSpecId()
+    local api = C_SpecializationInfo
+    if not (api and api.GetSpecialization and api.GetSpecializationInfo) then return nil end
+    local index = api.GetSpecialization()
+    if not index or index == 0 then return nil end
+    return (api.GetSpecializationInfo(index))
+end
+
+function Compat.InspectSpecId(unit)
+    if not GetInspectSpecialization then return nil end
+    local id = GetInspectSpecialization(unit)
+    if not id or id == 0 or Compat.IsSecret(id) then return nil end
+    return id
+end
+
+-- Inspection possible maintenant (visible, à portée d'inspection).
+function Compat.CanInspect(unit)
+    if not NotifyInspect or not UnitIsVisible(unit) then return false end
+    if CanInspect and not CanInspect(unit) then return false end
+    if CheckInteractDistance and not CheckInteractDistance(unit, 1) then return false end
+    return true
+end
+
+function Compat.NotifyInspect(unit)
+    NotifyInspect(unit)
+end
+
+function Compat.ClearInspect()
+    if ClearInspectPlayer then ClearInspectPlayer() end
+end
+
 -- Client « Midnight » : certaines valeurs sont secrètes et inutilisables par les addons.
 function Compat.IsSecret(value)
     return issecretvalue ~= nil and issecretvalue(value) or false
