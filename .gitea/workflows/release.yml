@@ -80,7 +80,7 @@ jobs:
     needs: tag
     runs-on: ubuntu-latest
     steps:
-      # Historique complet : le packager lit les tags pour la version et le changelog.
+      # Historique complet : tags et commits pour le changelog.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -88,20 +88,25 @@ jobs:
       - name: Select tag
         env:
           TAG: ${{ needs.tag.outputs.tag }}
-        run: |
-          git checkout -q "refs/tags/$TAG"
-          echo "TAG=$TAG" >> "$GITHUB_ENV"
+        run: echo "TAG=$TAG" >> "$GITHUB_ENV"
 
-      - name: Install packager dependencies
+      - name: Install dependencies
         run: |
           SUDO=$(command -v sudo || true)
           $SUDO apt-get update -qq
-          $SUDO apt-get install -y -qq jq zip unzip subversion
+          $SUDO apt-get install -y -qq jq zip unzip
 
-      # Script du packager lancé directement : act_runner ne sait pas résoudre le tag « v2 » de
-      # l'action BigWigsMods/packager. -d : construit le zip (.pkgmeta, @project-version@) sans envoi.
+      # Zip du tag dans un dossier FriendlyBuffer/ : git archive laisse de côté les fichiers
+      # marqués export-ignore (.gitattributes), @project-version@ du .toc devient le tag.
       - name: Build package
-        run: curl -fsSL https://raw.githubusercontent.com/BigWigsMods/packager/v2/release.sh | bash -s -- -d
+        run: |
+          set -eu
+          rm -rf .release
+          mkdir -p .release/build
+          git archive --prefix=FriendlyBuffer/ "refs/tags/$TAG" | tar -x -C .release/build
+          sed -i "s/@project-version@/$TAG/g" .release/build/FriendlyBuffer/FriendlyBuffer.toc
+          (cd .release/build && zip -qr "../FriendlyBuffer-$TAG.zip" FriendlyBuffer)
+          unzip -l ".release/FriendlyBuffer-$TAG.zip"
 
       - name: Create Gitea release
         env:
