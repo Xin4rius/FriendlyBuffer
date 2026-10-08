@@ -93,8 +93,9 @@ lua tests/smoke.lua
 
 The Gitea Actions workflow (`.gitea/workflows/release.yml`) runs the tests on every push. Pushing a
 version tag builds the addon zip (`.pkgmeta`, `@project-version@` replaced by the tag) and creates a
-release with the zip and the list of commits since the previous tag. CurseForge picks the new
-version up from the GitHub mirror.
+Gitea release with the zip and the list of commits since the previous tag. Once the tag has reached
+the GitHub mirror, it triggers the CurseForge packager webhook (`CF_API_TOKEN` secret,
+`CURSEFORGE_PROJECT_ID` variable), which packages the addon from the mirror.
 
 ```bash
 git tag -a v1.2.0 -m "v1.2.0"

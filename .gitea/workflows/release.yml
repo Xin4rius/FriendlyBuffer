@@ -1,5 +1,8 @@
-# Tests à chaque push ; release Gitea (zip + changelog) quand un tag de version est poussé.
-# CurseForge récupère l'addon depuis le miroir GitHub : rien n'est envoyé d'ici.
+# Tests à chaque push ; quand un tag de version est poussé : release Gitea (zip + changelog), puis
+# packager CurseForge déclenché (webhook) une fois le tag arrivé sur le miroir GitHub.
+#
+# Gitea, Actions > Secrets   : CF_API_TOKEN           (jeton API CurseForge)
+# Gitea, Actions > Variables : CURSEFORGE_PROJECT_ID  (ID numérique du projet CurseForge)
 #
 # Publier :  git tag -a v1.2.0 -m "v1.2.0"  puis  git push origin v1.2.0
 # Un tag contenant « beta » ou « alpha » donne une pré-version.
@@ -72,6 +75,10 @@ jobs:
           API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}
         run: |
           set -eu
+          # Relance d'un tag déjà publié (ex. renvoi sur CurseForge) : la release existe déjà.
+          if curl -sf -H "Authorization: token $TOKEN" "$API/releases/tags/$TAG" > /dev/null; then
+            echo "Release $TAG déjà présente"; exit 0
+          fi
           ZIP=$(ls .release/*.zip | head -n 1)
           PREVIOUS=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)
           RANGE=${PREVIOUS:+$PREVIOUS..}$TAG
@@ -84,3 +91,22 @@ jobs:
           curl -sSf -X POST -H "Authorization: token $TOKEN" -F "attachment=@$ZIP" \
             "$API/releases/$ID/assets?name=$(basename "$ZIP")" > /dev/null
           echo "Release $TAG : $(basename "$ZIP")"
+
+      # CurseForge empaquette lui-même depuis le miroir GitHub (webhook) : on attend que le miroir
+      # ait reçu le tag, puis on déclenche son packager.
+      - name: Trigger CurseForge packager
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+          MIRROR: https://github.com/${{ github.repository }}.git
+        run: |
+          set -eu
+          [ -n "$CF_API_TOKEN" ] || { echo "::error::Secret CF_API_TOKEN manquant"; exit 1; }
+          [ -n "$PROJECT_ID" ] || { echo "::error::Variable CURSEFORGE_PROJECT_ID manquante"; exit 1; }
+          for i in $(seq 1 60); do
+            git ls-remote --exit-code --tags "$MIRROR" "refs/tags/$TAG" > /dev/null && break
+            [ "$i" -lt 60 ] || { echo "::error::$TAG absent du miroir GitHub après 10 min"; exit 1; }
+            sleep 10
+          done
+          curl -sSf -X POST -d '' "https://www.curseforge.com/api/projects/$PROJECT_ID/package?token=$CF_API_TOKEN"
+          echo "Packager CurseForge déclenché pour $TAG"
