@@ -91,22 +91,27 @@ lua tests/smoke.lua
 
 ## Releasing
 
-The Gitea Actions workflow (`.gitea/workflows/release.yml`) runs the tests on every push. Pushing a
-version tag builds the addon zip (`.pkgmeta`, `@project-version@` replaced by the tag) and creates a
-Gitea release with the zip and the list of commits since the previous tag. Once the tag has reached
-the GitHub mirror, it triggers the CurseForge packager webhook (`CF_API_TOKEN` secret,
-`CURSEFORGE_PROJECT_ID` variable), which packages the addon from the mirror.
+The Gitea Actions workflow (`.gitea/workflows/release.yml`) runs the tests on every push. On a push to
+`main` that passes the tests, it tags the next patch version (`v1.1.0` → `v1.1.1`), builds the addon
+zip (`.pkgmeta`, `@project-version@` replaced by the tag) and creates a Gitea release with the zip and
+the list of commits since the previous tag. Once the tag has reached the GitHub mirror, it triggers
+the CurseForge packager webhook (`CF_API_TOKEN` secret, `CURSEFORGE_PROJECT_ID` variable), which
+packages the addon from the mirror.
+
+For a minor or major version, tag the commit yourself and push it with `main`; the workflow uses
+that tag instead of creating one:
 
 ```bash
 git tag -a v1.2.0 -m "v1.2.0"
 ```
 
 ```bash
-git push origin v1.2.0
+git push --follow-tags origin main
 ```
 
-Tags containing `beta` or `alpha` become pre-releases. To create the release of a tag that was
-already pushed: Actions → CI / Release → Run workflow, with the tag.
+Tags containing `beta` or `alpha` become pre-releases. `[skip ci]` in the commit message pushes
+without a release. To create the release of a tag that was already pushed: Actions → CI / Release →
+Run workflow, with the tag.
 
 ## License
 
