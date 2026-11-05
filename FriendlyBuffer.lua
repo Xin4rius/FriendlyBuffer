@@ -163,6 +163,7 @@ local dirty, sinceScan, sinceTick = true, 0, 0
 
 local function scan()
     dirty, sinceScan, sinceTick = false, 0, 0
+    if ns.Compat.AurasSecret() then return end -- affichage figé jusqu'à ce qu'elles redeviennent lisibles
     local rows, satisfied = buildRows()
     ns.MainFrame.Render(rows, doneRows(rows, satisfied, GetTime()))
     if ns.db.hiddenPlates then ns.Nameplates.Refresh() end
@@ -221,6 +222,10 @@ local function debugScan()
 end
 
 local function debugTarget()
+    if ns.Compat.AurasSecret() then
+        say(L["not possible during combat."])
+        return
+    end
     local unit = UnitExists("target") and "target" or "player"
     local _, class = UnitClass(unit)
     say(string.format(L["analysis of %s (%s, level %s)"], UnitName(unit) or "?", tostring(class), tostring(UnitLevel(unit))))

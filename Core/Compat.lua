@@ -154,6 +154,11 @@ function Compat.IsSecret(value)
     return issecretvalue ~= nil and issecretvalue(value) or false
 end
 
+-- Auras illisibles par les addons (combat sur le client « Midnight ») : les lire lève une erreur.
+function Compat.AurasSecret()
+    return C_Secrets ~= nil and C_Secrets.ShouldAurasBeSecret ~= nil and C_Secrets.ShouldAurasBeSecret() or false
+end
+
 function Compat.ClassColor(class)
     local c = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[class]
     if c then return c.r, c.g, c.b end
