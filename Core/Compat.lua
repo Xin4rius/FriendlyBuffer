@@ -129,7 +129,7 @@ end
 function Compat.InspectSpecId(unit)
     if not GetInspectSpecialization then return nil end
     local id = GetInspectSpecialization(unit)
-    if not id or id == 0 or Compat.IsSecret(id) then return nil end
+    if not id or Compat.IsSecret(id) or id == 0 then return nil end
     return id
 end
 

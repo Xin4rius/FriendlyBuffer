@@ -83,7 +83,8 @@ local function nameText(frame, unit)
     if blizzard and blizzard.GetText then
         -- pcall : si ce client restreint aussi la lecture du texte, on passe à UnitName.
         local ok, text = pcall(blizzard.GetText, blizzard)
-        if ok and text and text ~= "" and not ns.Compat.IsSecret(text) then return text end
+        -- IsSecret d'abord : comparer une valeur secrète lève une erreur.
+        if ok and text and not ns.Compat.IsSecret(text) and text ~= "" then return text end
     end
     local name, surname = UnitName(unit)
     if not name or ns.Compat.IsSecret(name) or ns.Compat.IsSecret(surname) then return nil end
@@ -95,14 +96,14 @@ end
 local function selectionColor(unit)
     if not UnitSelectionColor then return 1, 1, 1 end
     local r, g, b = UnitSelectionColor(unit, true)
-    if r == nil or ns.Compat.IsSecret(r) then return 1, 1, 1 end
+    if ns.Compat.IsSecret(r) or r == nil then return 1, 1, 1 end
     return r, g, b
 end
 
 local function guildName(unit)
     if not ns.db.plateGuild or not GetGuildInfo then return nil end
     local guild = GetGuildInfo(unit)
-    if not guild or guild == "" or ns.Compat.IsSecret(guild) then return nil end
+    if not guild or ns.Compat.IsSecret(guild) or guild == "" then return nil end
     return guild
 end
 
