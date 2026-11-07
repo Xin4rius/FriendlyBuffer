@@ -330,6 +330,9 @@ events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function(_, event, unit, arg2)
     if event == "PLAYER_LOGIN" then
         onLogin()
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        ns.Nameplates.Apply() -- entrée / sortie d'instance
+        ns.RequestScan()
     elseif event == "PLAYER_REGEN_ENABLED" then
         ns.Nameplates.Apply()
         scan()

@@ -218,6 +218,19 @@ end
 -- Active ou retire le mode discret (hors combat : la CVar est protégée en combat).
 function Nameplates.Apply()
     if InCombatLockdown() then return end
+    -- En instance, les barres alliées sont interdites aux addons : impossible de les rendre
+    -- discrètes, et inutiles (seul le groupe y est). On les coupe le temps de l'instance.
+    if ns.db.hiddenPlates and IsInInstance() then
+        if ns.Compat.FriendlyNameplatesShown() then
+            ns.Compat.SetFriendlyNameplates(false)
+            ns.db.platesHiddenInInstance = true
+        end
+        return
+    end
+    if ns.db.platesHiddenInInstance then
+        ns.Compat.SetFriendlyNameplates(true)
+        ns.db.platesHiddenInInstance = nil
+    end
     if ns.db.hiddenPlates then
         if not ns.Compat.FriendlyNameplatesShown() then
             ns.Compat.SetFriendlyNameplates(true)

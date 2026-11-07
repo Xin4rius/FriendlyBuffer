@@ -79,6 +79,8 @@ _G.strtrim = function(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
 _G.GetTime = function() return now end
 _G.GetLocale = function() return "frFR" end
 _G.InCombatLockdown = function() return inCombat end
+local inInstance = false
+_G.IsInInstance = function() return inInstance end
 _G.IsInRaid = function() return false end
 _G.IsInGroup = function() return true end
 _G.GetNumSubgroupMembers = function() return 2 end
@@ -331,6 +333,17 @@ fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
 check(uf.healthBar.alpha == 0 and uf.name.alpha == 0 and own.shown, "nouvelle barre alliée : discrète à nouveau")
 ns.db.hiddenPlates = false
 ns.OnSettingsChanged()check(uf.healthBar.alpha == 1 and uf.name.alpha == 1 and own.shown == false and clickThrough == false, "option coupée : barres restaurées")
+-- En instance, les barres alliées sont interdites aux addons : on les coupe, puis on les rend.
+ns.db.hiddenPlates = true
+ns.OnSettingsChanged()
+inInstance = true
+fire("PLAYER_ENTERING_WORLD")
+check(cvars.nameplateShowFriends == "0", "instance : barres alliées coupées")
+inInstance = false
+fire("PLAYER_ENTERING_WORLD")
+check(cvars.nameplateShowFriends == "1", "sortie d'instance : barres alliées rétablies")
+ns.db.hiddenPlates = false
+ns.OnSettingsChanged()
 
 -- Commandes
 printed = {}
