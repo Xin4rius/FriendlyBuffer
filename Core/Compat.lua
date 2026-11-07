@@ -53,8 +53,7 @@ function Compat.IsKnown(spellId)
     return false
 end
 
--- true / false, ou nil si la portée ne peut pas être déterminée.
-function Compat.InRange(spellId, unit)
+local function spellInRange(spellId, unit)
     if C_Spell and C_Spell.IsSpellInRange then
         local inRange = C_Spell.IsSpellInRange(spellId, unit)
         if Compat.IsSecret(inRange) then return nil end
@@ -65,6 +64,14 @@ function Compat.InRange(spellId, unit)
     local r = IsSpellInRange(name, unit)
     if r == nil then return nil end
     return r == 1
+end
+
+-- true / false, ou nil si la portée ne peut pas être déterminée.
+function Compat.InRange(spellId, unit)
+    local r = spellInRange(spellId, unit)
+    -- Un membre du groupe hors de la zone de visibilité donne nil : il est forcément trop loin.
+    if r == nil and UnitIsVisible and not UnitIsVisible(unit) then return false end
+    return r
 end
 
 function Compat.ItemCount(itemId)

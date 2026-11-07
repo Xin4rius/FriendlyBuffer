@@ -116,11 +116,14 @@ _G.C_UnitAuras = { GetBuffDataByIndex = function(u, i) return U(u) and U(u).buff
 _G.C_Spell = {
     GetSpellInfo = function(id) return { name = "Sort" .. id, iconID = 1 } end,
     GetSpellSubtext = function() return "Rang 1" end,
-    IsSpellInRange = function(_, u) return not (U(u) and U(u).far) end,
+    IsSpellInRange = function(_, u)
+        if U(u) and U(u).remote then return nil end
+        return not (U(u) and U(u).far)
+    end,
 }
 _G.C_Item = { GetItemCount = function() return 5 end }
 _G.time = function() return 1700000000 end
-_G.UnitIsVisible = function(u) return U(u) ~= nil end
+_G.UnitIsVisible = function(u) return U(u) ~= nil and not U(u).remote end
 _G.CanInspect = function(u) return U(u) ~= nil end
 _G.CheckInteractDistance = function(u) return U(u) ~= nil and not U(u).far end
 local inspectRequests, inspected = {}, nil
@@ -185,6 +188,9 @@ check(row(2).row and row(2).row.name == "Jaina" and row(2).row.need.family == "s
 check(row(3).row and row(3).row.name == "Moi", "ligne 3 = soi-même")
 check(row(4).row and row(4).row.name == "Valeera Sanguinar", "ligne 4 = inconnu, prénom + nom séparés par un espace")
 check(row(5).shown == false, "ligne 5 masquée (joueur hors de portée exclu)")
+units.party1.remote = true
+check(ns.Compat.InRange(10938, "party1") == false, "membre du groupe hors de vue (portée inconnue) : hors de portée")
+units.party1.remote = nil
 check(row(1).attrs.type1 == "macro" and row(1).attrs.macrotext1 == "/cast [@party1] Sort10938(Rang 1)", "groupe : /cast [@unité], sans ciblage")
 local STRANGER = "/cleartarget\n/targetexact Valeera Sanguinar\n/cast [@target,help,nodead] Sort10938(Rang 1)\n"
 check(row(4).attrs.type1 == "macro" and row(4).attrs.macrotext1 == STRANGER .. "/targetlasttarget", "inconnu : ciblage par prénom nom")
