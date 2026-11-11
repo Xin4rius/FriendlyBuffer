@@ -68,11 +68,19 @@ local function familyNeed(fam, aura, ctx, target)
     return nil
 end
 
+-- Familles d'un même groupe `excl` : elles se remplacent sur la cible. Seule la première activée
+-- (et connue) de la liste compte, sinon on poserait l'une puis l'autre sans fin.
 local function evaluateCumulative(classData, ctx, target)
     local chosen
+    local taken = {}
     for _, entry in ipairs(ctx.priorities) do
         local fam = classData.families[entry.key]
-        if entry.enabled and fam then
+        local usable = entry.enabled and fam
+        if usable and fam.excl then
+            usable = not taken[fam.excl] and Decision.BestRank(fam.ranks, ctx.isKnown, target.level) ~= nil
+            if usable then taken[fam.excl] = true end
+        end
+        if usable then
             local need = familyNeed(fam, strongestAura(target.auras, fam.key), ctx, target)
             if need and (not chosen or Decision.URGENCY[need.reason] < Decision.URGENCY[chosen.reason]) then
                 chosen = need
@@ -121,6 +129,22 @@ function Decision.Evaluate(classData, ctx, target)
         return evaluateExclusive(classData, ctx, target)
     end
     return evaluateCumulative(classData, ctx, target)
+end
+
+-- Composants des versions de groupe que le joueur connaît (meilleur rang de chaque famille),
+-- sans doublon : { itemId, ... }.
+function Decision.Reagents(classData, isKnown)
+    local list, seen = {}, {}
+    for _, fam in pairs(classData.families) do
+        local rank = Decision.BestRank(fam.group, isKnown)
+        local reagent = rank and (rank.reagent or fam.reagent)
+        if reagent and not seen[reagent] then
+            seen[reagent] = true
+            list[#list + 1] = reagent
+        end
+    end
+    table.sort(list)
+    return list
 end
 
 -- Tri des lignes : joueurs derrière un obstacle en dernier, puis urgence, groupe avant inconnus, nom.

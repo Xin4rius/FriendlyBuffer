@@ -248,6 +248,62 @@ test("SetFamilyForAll : tous les profils, autres familles intactes", function()
     eq(db.priorities.WARRIOR[2].key, "spirit"); eq(db.priorities.WARRIOR[2].enabled, false)
 end)
 
+test("FamilyEnabledForAll : vrai seulement si activée partout", function()
+    local db = ns.Config.Load({}, PRIEST)
+    eq(ns.Config.FamilyEnabledForAll(db, "spirit"), false) -- coupée pour les classes sans mana
+    ns.Config.SetFamilyForAll(db, "spirit", true)
+    eq(ns.Config.FamilyEnabledForAll(db, "spirit"), true)
+    ns.Config.SetFamilyForAll(db, "innerfire", false)
+    eq(db.personal[1].enabled, false, "buff personnel")
+end)
+
+test("Buffs exclusifs : seul le premier activé de la liste est posé", function()
+    local MAGE = ns.Spells.MAGE
+    local priorities = { { key = "amplify", enabled = true }, { key = "dampen", enabled = true } }
+    local ctx = { isKnown = knowsAll, settings = SETTINGS, priorities = priorities }
+    local need = ns.Decision.Evaluate(MAGE, ctx, { level = 60, auras = {} })
+    eq(need.family, "amplify")
+    -- Amplification posée : on ne réclame pas l'atténuation, qui la remplacerait.
+    eq(ns.Decision.Evaluate(MAGE, ctx, { level = 60, auras = { aura("amplify", 4) } }), nil)
+    -- Amplification pas encore apprise : l'atténuation prend le relais.
+    ctx.isKnown = function(id) return ns.SpellIndex[id].family ~= "amplify" end
+    eq(ns.Decision.Evaluate(MAGE, ctx, { level = 60, auras = {} }).family, "dampen")
+end)
+
+test("Buffs personnels : armure de glace par défaut, armure du mage si cochée", function()
+    local data = ns.Spells.MAGE.personal
+    local db = ns.Config.Load({}, ns.Spells.MAGE)
+    local ctx = { isKnown = knowsAll, settings = SETTINGS, priorities = db.personal }
+    eq(ns.Decision.Evaluate(data, ctx, { level = 60, auras = {} }).single.id, 10220)
+    ns.Config.SetFamilyForAll(db, "magearmor", true)
+    eq(db.personal[2].key, "icearmor"); eq(db.personal[2].enabled, false, "armure de glace décochée")
+    eq(ns.Decision.Evaluate(data, ctx, { level = 60, auras = {} }).family, "magearmor")
+    eq(ns.Decision.Evaluate(data, ctx, { level = 60, auras = { aura("magearmor", 3) } }), nil)
+end)
+
+test("Reagents : composant du meilleur rang de groupe connu, sans doublon", function()
+    local list = ns.Decision.Reagents(PRIEST, knowsAll)
+    eq(#list, 1); eq(list[1], 17029)
+    -- Seule la prière de robustesse rang 1 est connue : bougie sanctifiée.
+    list = ns.Decision.Reagents(PRIEST, knows({ [21562] = true }))
+    eq(#list, 1); eq(list[1], 17028)
+    eq(#ns.Decision.Reagents(ns.Spells.WARRIOR, knowsAll), 0)
+end)
+
+test("SwitchContext : priorités propres à chaque contexte", function()
+    local db = ns.Config.Load({}, PRIEST)
+    eq(ns.Config.SwitchContext(db, PRIEST, "solo"), true)
+    eq(ns.Config.SwitchContext(db, PRIEST, "solo"), false)
+    ns.Config.SetFamilyForAll(db, "shadowprot", true)
+    ns.Config.SwitchContext(db, PRIEST, "raid") -- part d'une copie du contexte quitté
+    eq(db.priorities.WARRIOR[3].enabled, true)
+    ns.Config.SetFamilyForAll(db, "shadowprot", false)
+    ns.Config.SwitchContext(db, PRIEST, "solo")
+    eq(db.priorities.WARRIOR[3].enabled, true, "solo intact")
+    ns.Config.SwitchContext(db, PRIEST, "raid")
+    eq(db.priorities.WARRIOR[3].enabled, false, "raid retrouvé")
+end)
+
 test("Compare : urgence, groupe, nom", function()
     local rows = {
         { name = "Zed", isGroup = true, need = { reason = "lower" } },

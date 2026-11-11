@@ -79,6 +79,12 @@ function Compat.ItemCount(itemId)
     return GetItemCount(itemId)
 end
 
+-- Nom de l'objet, ou nil s'il n'est pas encore connu du client.
+function Compat.ItemName(itemId)
+    if C_Item and C_Item.GetItemNameByID then return C_Item.GetItemNameByID(itemId) end
+    return GetItemInfo and (GetItemInfo(itemId)) or nil
+end
+
 function Compat.GetCVar(name)
     if C_CVar and C_CVar.GetCVar then return C_CVar.GetCVar(name) end
     return GetCVar(name)

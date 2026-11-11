@@ -21,6 +21,20 @@ local function groupUnits()
     return units
 end
 
+-- Familiers des membres du groupe (démons, familiers de chasseur).
+local function petUnits()
+    local units = {}
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do units[#units + 1] = "raidpet" .. i end
+    else
+        units[1] = "pet"
+        if IsInGroup() then
+            for i = 1, GetNumSubgroupMembers() do units[#units + 1] = "partypet" .. i end
+        end
+    end
+    return units
+end
+
 -- Barres de nom d'abord : c'est l'unité sur laquelle le sort sera lancé. La cible en dernier
 -- (le survol est exclu : il disparaît dès que la souris va sur la fenêtre).
 local function strangerUnits()
@@ -31,10 +45,10 @@ local function strangerUnits()
 end
 
 -- Retourne true, ou false + raison du rejet (pour /fb debug).
-local function isCandidate(unit, isGroup)
+local function isCandidate(unit, isGroup, isPet)
     if not UnitExists(unit) then return false, nil end
-    if not UnitIsPlayer(unit) then return false, L["NPC"] end
-    if not UnitIsConnected(unit) or UnitIsDeadOrGhost(unit) then return false, L["dead/offline"] end
+    if not isPet and not UnitIsPlayer(unit) then return false, L["NPC"] end
+    if (not isPet and not UnitIsConnected(unit)) or UnitIsDeadOrGhost(unit) then return false, L["dead/offline"] end
     if not UnitCanAssist("player", unit) then return false, L["not assistable"] end
     if not isGroup then
         if UnitInParty(unit) or UnitInRaid(unit) or UnitIsUnit(unit, "player") then return false, nil end
@@ -54,11 +68,11 @@ local function fullName(unit)
 end
 
 -- Retourne { {unit, guid, name, class, level, isGroup}, ... } dédoublonné par GUID,
--- et le décompte des unités rejetées par raison.
-function Scanner.Collect(includeStrangers)
+-- et le décompte des unités rejetées par raison. Les familiers ont la classe "PET".
+function Scanner.Collect(includeStrangers, includePets)
     local result, seen, rejected = {}, {}, {}
-    local function add(unit, isGroup)
-        local ok, reason = isCandidate(unit, isGroup)
+    local function add(unit, isGroup, isPet)
+        local ok, reason = isCandidate(unit, isGroup, isPet)
         if not ok then
             if reason then rejected[reason] = (rejected[reason] or 0) + 1 end
             return
@@ -73,11 +87,14 @@ function Scanner.Collect(includeStrangers)
         seen[guid] = true
         local _, class = UnitClass(unit)
         result[#result + 1] = {
-            unit = unit, guid = guid, name = name, class = class,
+            unit = unit, guid = guid, name = name, class = isPet and "PET" or class,
             level = UnitLevel(unit), isGroup = isGroup,
         }
     end
     for _, unit in ipairs(groupUnits()) do add(unit, true) end
+    if includePets then
+        for _, unit in ipairs(petUnits()) do add(unit, true, true) end
+    end
     if includeStrangers then
         for _, unit in ipairs(strangerUnits()) do add(unit, false) end
     end
@@ -86,7 +103,7 @@ end
 
 -- Unité qui désigne actuellement ce GUID (les numéros de barres de nom changent), ou nil.
 function Scanner.FindUnit(guid)
-    for _, list in ipairs({ groupUnits(), strangerUnits() }) do
+    for _, list in ipairs({ groupUnits(), petUnits(), strangerUnits() }) do
         for _, unit in ipairs(list) do
             if UnitGUID(unit) == guid then return unit end
         end

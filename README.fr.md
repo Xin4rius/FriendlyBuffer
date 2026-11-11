@@ -26,6 +26,9 @@ inférieur** à ce que vous pouvez lui poser (en tenant compte de son niveau).
 - `/fb debug` : bilan du scan (candidats, rejets, barres de nom) et analyse de votre cible
 - `/fb plaques` (ou `/fb plates`) : active / désactive les barres de nom alliées (comme Maj+V)
 - `/fb reset` : replace la fenêtre au centre
+- `/fb toggle <buff>` : active / coupe un buff pour tout le monde (pratique en macro)
+- `/fb ignore <nom>` : ignore un joueur, ou cesse de l'ignorer (Maj + clic droit sur sa ligne) ; sans nom, liste les ignorés
+- Raccourci clavier « buffer le premier joueur de la liste » : Options → Raccourcis → AddOns
 
 Joueurs hors groupe : WoW ne les rend visibles aux addons qu'à travers les **barres de nom
 alliées** (ou votre cible). Activez-les (Maj+V), ou cochez l'option « barres de nom alliées

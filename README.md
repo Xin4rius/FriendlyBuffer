@@ -26,6 +26,9 @@ rank** than the one you can cast on them (their level is taken into account).
 - `/fb debug`: scan summary (candidates, rejections, nameplates) and analysis of your target
 - `/fb plates`: toggle friendly nameplates (same as Shift+V)
 - `/fb reset`: move the window back to the center
+- `/fb toggle <buff>`: turn a buff on / off for everyone (handy in a macro)
+- `/fb ignore <name>`: ignore a player, or stop ignoring them (Shift + right click on their row); no name: list ignored players
+- Key binding "buff the first player of the list": Options → Keybindings → AddOns
 
 Players outside your group: WoW only exposes them to addons through **friendly nameplates** (or
 your target). Turn them on (Shift+V), or enable the "discreet friendly nameplates" option: the

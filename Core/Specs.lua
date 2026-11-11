@@ -35,8 +35,9 @@ end
 
 -- « Classe – Spé » / « Classe (spé inconnue) » pour les classes hybrides, « Classe » sinon.
 function Specs.Label(profileKey)
+    if profileKey == "PET" then return L["Pets"] end
     local profile = ns.PROFILES[profileKey]
-    local class = (LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[profile.class]) or profile.class
+    local class =(LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[profile.class]) or profile.class
     if LABELS[profileKey] then return class .. " - " .. LABELS[profileKey] end
     if ns.SPEC_PROFILES[profile.class] then return class .. " (" .. L["spec unknown"] .. ")" end
     return class

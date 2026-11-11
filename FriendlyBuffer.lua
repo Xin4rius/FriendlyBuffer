@@ -28,18 +28,27 @@ function ns.SpellLabel(rank)
     return name
 end
 
+-- Nom et icône d'une famille : ceux du meilleur rang connu (à défaut, du premier).
+function ns.FamilyName(fam)
+    local rank = ns.Decision.BestRank(fam.ranks, ns.Compat.IsKnown) or fam.ranks[1]
+    local name, icon = ns.Compat.GetSpellInfo(rank.id)
+    return name or fam.key, icon
+end
+
 -- Remplit l'index nom -> famille et signale une fois les IDs absents du client.
 local function indexSpellNames()
     local missing = {}
     for _, data in pairs(ns.Spells) do
-        for key, fam in pairs(data.families) do
-            for _, list in ipairs({ fam.ranks, fam.group or {} }) do
-                for _, rank in ipairs(list) do
-                    local name = ns.Compat.GetSpellInfo(rank.id)
-                    if name then
-                        ns.Auras.NameIndex[name] = ns.Auras.NameIndex[name] or key
-                    elseif data == ns.classData then
-                        missing[#missing + 1] = rank.id
+        for _, families in ipairs({ data.families, data.personal.families }) do
+            for key, fam in pairs(families) do
+                for _, list in ipairs({ fam.ranks, fam.group or {} }) do
+                    for _, rank in ipairs(list) do
+                        local name = ns.Compat.GetSpellInfo(rank.id)
+                        if name then
+                            ns.Auras.NameIndex[name] = ns.Auras.NameIndex[name] or key
+                        elseif data == ns.classData then
+                            missing[#missing + 1] = rank.id
+                        end
                     end
                 end
             end
@@ -130,19 +139,21 @@ local function buildRows(stats)
     if not ns.classData then return rows, satisfied end
     local db = ns.db
     local now = GetTime()
-    for _, candidate in ipairs(ns.Scanner.Collect(db.includeStrangers)) do
-        candidate.profile = ns.Specs.ProfileFor(candidate)
-        local priorities = db.priorities[candidate.profile]
-        if priorities then
-            local need = ns.Decision.Evaluate(ns.classData, {
-                isKnown = ns.Compat.IsKnown,
-                settings = db,
-                priorities = priorities,
-            }, {
-                level = candidate.level,
-                isGroup = candidate.isGroup,
-                auras = ns.Auras.Read(candidate.unit),
-            })
+    local ctx = { isKnown = ns.Compat.IsKnown, settings = db }
+    -- Classe sans buff à poser sur autrui : seul le joueur lui-même compte (buffs personnels).
+    local others = ns.hasFamilies
+    for _, candidate in ipairs(ns.Scanner.Collect(others and db.includeStrangers, others and db.includePets)) do
+        local isSelf = UnitIsUnit(candidate.unit, "player")
+        if (others or isSelf) and not db.ignored[candidate.name] then
+            candidate.profile = ns.Specs.ProfileFor(candidate)
+            local target = { level = candidate.level, isGroup = candidate.isGroup, auras = ns.Auras.Read(candidate.unit) }
+            ctx.priorities = db.priorities[candidate.profile]
+            local need = ns.Decision.Evaluate(ns.classData, ctx, target)
+            -- Soi-même : à défaut, un buff personnel.
+            if not need and isSelf then
+                ctx.priorities = db.personal
+                need = ns.Decision.Evaluate(ns.classData.personal, ctx, target)
+            end
             -- Hors de portée du sort : pas affiché (portée inconnue = affiché).
             if need and ns.Compat.InRange(need.single.id, candidate.unit) == false then
                 if stats then stats.outOfRange = stats.outOfRange + 1 end
@@ -161,9 +172,19 @@ end
 
 local dirty, sinceScan, sinceTick = true, 0, 0
 
+local function currentContext()
+    if IsInRaid() then return "raid" end
+    if IsInGroup() then return "party" end
+    return "solo"
+end
+
 local function scan()
     dirty, sinceScan, sinceTick = false, 0, 0
     if ns.Compat.AurasSecret() then return end -- affichage figé jusqu'à ce qu'elles redeviennent lisibles
+    if ns.classData and ns.db.contextPresets and ns.Config.SwitchContext(ns.db, ns.classData, currentContext()) then
+        say(string.format(L["priorities in use: %s."], ns.Config.CONTEXTS[ns.db.context]))
+        ns.Options.Refresh()
+    end
     local rows, satisfied = buildRows()
     ns.MainFrame.Render(rows, doneRows(rows, satisfied, GetTime()))
     if ns.db.hiddenPlates then ns.Nameplates.Refresh() end
@@ -178,13 +199,32 @@ function ns.OnSettingsChanged()
 end
 
 ---------------------------------------------------------------------------
+-- Composants des buffs de groupe
+---------------------------------------------------------------------------
+
+local reagentCounts = {}  -- itemId -> dernier décompte vu
+
+-- Prévient quand un composant passe sous le seuil, puis à chaque nouvelle baisse.
+local function checkReagents()
+    local limit = ns.db.reagentWarn
+    if limit <= 0 or not ns.db.groupBuffs then return end
+    for _, item in ipairs(ns.Decision.Reagents(ns.classData, ns.Compat.IsKnown)) do
+        local count, last = ns.Compat.ItemCount(item), reagentCounts[item]
+        reagentCounts[item] = count
+        if count <= limit and (not last or count < last) then
+            say(string.format(L["only %d left: %s."], count, ns.Compat.ItemName(item) or L["group buff reagents"]))
+        end
+    end
+end
+
+---------------------------------------------------------------------------
 -- Commandes
 ---------------------------------------------------------------------------
 
 local NAMEPLATE_HINT = L["players outside your group can only be detected through friendly nameplates, which are disabled: press Shift+V, type /fb plates, or enable the 'discreet friendly nameplates' option."]
 
 local function warnNameplates()
-    if ns.db.includeStrangers and not ns.db.hiddenPlates and not ns.Compat.FriendlyNameplatesShown() then
+    if ns.hasFamilies and ns.db.includeStrangers and not ns.db.hiddenPlates and not ns.Compat.FriendlyNameplatesShown() then
         say(NAMEPLATE_HINT)
     end
 end
@@ -203,7 +243,7 @@ ns.ToggleNameplates = toggleNameplates
 
 -- Bilan du scan : pourquoi la liste est (ou non) vide.
 local function debugScan()
-    local candidates, rejected = ns.Scanner.Collect(ns.db.includeStrangers)
+    local candidates, rejected = ns.Scanner.Collect(ns.db.includeStrangers, ns.db.includePets)
     local group, strangers = 0, 0
     for _, c in ipairs(candidates) do
         if c.isGroup then group = group + 1 else strangers = strangers + 1 end
@@ -263,10 +303,67 @@ local function toggleWindow()
     scan()
 end
 
+-- Familles (de cible ou personnelles) désignées par leur clé, leur nom ou un bout de leur nom,
+-- et les noms de toutes les familles de la classe.
+local function findFamilies(text)
+    text = text:lower()
+    local matches, names, exact = {}, {}, nil
+    for _, families in ipairs({ ns.classData.families, ns.classData.personal.families }) do
+        for key, fam in pairs(families) do
+            local name = ns.FamilyName(fam)
+            names[#names + 1] = name
+            if key == text or name:lower() == text then exact = fam end
+            if text ~= "" and name:lower():find(text, 1, true) then matches[#matches + 1] = fam end
+        end
+    end
+    table.sort(names)
+    return exact and { exact } or matches, names
+end
+
+-- Active ou coupe un buff pour tout le monde (macro, raccourci).
+local function toggleFamily(text)
+    if not ns.classData then
+        say(L["your class has no supported buff."])
+        return
+    end
+    local matches, names = findFamilies(text)
+    if #matches ~= 1 then
+        say(string.format(L["/fb toggle <buff>, among: %s"], table.concat(names, ", ")))
+        return
+    end
+    local fam = matches[1]
+    local enabled = not ns.Config.FamilyEnabledForAll(ns.db, fam.key)
+    ns.Config.SetFamilyForAll(ns.db, fam.key, enabled)
+    say(string.format(enabled and L["%s: enabled for everyone."] or L["%s: disabled for everyone."], (ns.FamilyName(fam))))
+    ns.Options.Refresh()
+    scan()
+end
+
+-- Ignore un joueur (ou cesse de l'ignorer) ; sans nom, liste les ignorés.
+local function toggleIgnore(name)
+    local ignored = ns.db.ignored
+    if name == "" then
+        local names = {}
+        for n in pairs(ignored) do names[#names + 1] = n end
+        table.sort(names)
+        say(string.format(L["ignored players: %s"], #names > 0 and table.concat(names, ", ") or L["none"]))
+        return
+    end
+    ignored[name] = not ignored[name] or nil
+    say(string.format(ignored[name] and L["%s is now ignored (same command to undo)."] or L["%s is no longer ignored."], name))
+    scan()
+end
+
+-- Raccourci clavier (Bindings.xml) : un clic gauche sur la première ligne de la liste.
+BINDING_HEADER_FRIENDLYBUFFER = "FriendlyBuffer"
+_G["BINDING_NAME_CLICK FriendlyBufferRow1:LeftButton"] = L["Buff the first player of the list"]
+
 SLASH_FRIENDLYBUFFER1 = "/fb"
 SLASH_FRIENDLYBUFFER2 = "/friendlybuffer"
 SlashCmdList.FRIENDLYBUFFER = function(input)
-    local cmd = strtrim(input or ""):lower()
+    -- L'argument garde sa casse (nom de joueur).
+    local cmd, arg = strtrim(input or ""):match("^(%S*)%s*(.-)$")
+    cmd = cmd:lower()
     if cmd == "" then
         toggleWindow()
     elseif cmd == "options" or cmd == "config" then
@@ -277,8 +374,13 @@ SlashCmdList.FRIENDLYBUFFER = function(input)
         ns.MainFrame.ResetPosition()
     elseif cmd == "plates" or cmd == "plaques" or cmd == "nameplates" then
         toggleNameplates()
+    elseif cmd == "toggle" then
+        toggleFamily(arg)
+    elseif cmd == "ignore" then
+        toggleIgnore(arg)
     else
         say(L["/fb (show/hide), /fb options, /fb debug (analyze your target), /fb plates (friendly nameplates), /fb reset (position)"])
+        say(L["/fb toggle <buff> (on/off for everyone), /fb ignore <name> (ignore or stop ignoring a player; no name: list)"])
     end
 end
 
@@ -292,13 +394,14 @@ local SCAN_EVENTS = {
     "UNIT_AURA", "GROUP_ROSTER_UPDATE", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
     "PLAYER_TARGET_CHANGED", "UNIT_LEVEL", "SPELLS_CHANGED", "PLAYER_ENTERING_WORLD", "UNIT_FLAGS",
     "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "UI_ERROR_MESSAGE", "INSPECT_READY",
-    "CHARACTER_POINTS_CHANGED",
+    "CHARACTER_POINTS_CHANGED", "BAG_UPDATE_DELAYED",
 }
 
 local function onLogin()
     local _, class = UnitClass("player")
     ns.playerClass = class
     ns.classData = ns.Spells[class]
+    ns.hasFamilies = ns.classData ~= nil and next(ns.classData.families) ~= nil
     FriendlyBufferCharDB = FriendlyBufferCharDB or {}
     ns.db = ns.Config.Load(FriendlyBufferCharDB, ns.classData)
     ns.Specs.Init(ns.db)
@@ -337,6 +440,8 @@ events:SetScript("OnEvent", function(_, event, unit, arg2)
         ns.Nameplates.Apply()
         scan()
         ns.MainFrame.Flush()
+    elseif event == "BAG_UPDATE_DELAYED" then
+        checkReagents()
     elseif event == "UI_ERROR_MESSAGE" then
         onUIError(unit, arg2)
     elseif event == "INSPECT_READY" then

@@ -96,6 +96,7 @@ _G.UnitIsUnit = function(a, b) return a == b end
 _G.UnitIsPVP = function() return false end
 _G.UnitCanAttack = function() return false end
 _G.IsAltKeyDown = function() return false end
+_G.IsShiftKeyDown = function() return false end
 _G.UnitSelectionColor = function() return 0, 0, 1 end
 _G.MenuUtil = {
     CreateRadioMenu = function(dropdown, isSelected, setSelected, ...)
@@ -365,6 +366,80 @@ SlashCmdList.FRIENDLYBUFFER("")
 check(ns.db.hidden == true and FriendlyBufferFrame.shown == false, "/fb masque la fenêtre")
 SlashCmdList.FRIENDLYBUFFER("")
 check(ns.db.hidden == false, "/fb réaffiche")
+
+-- Bascule d'un buff pour tout le monde
+local function entry(list, key)
+    for _, e in ipairs(list) do if e.key == key then return e end end
+end
+local function rowOf(name)
+    for i = 1, 20 do
+        if row(i).shown and row(i).row and row(i).row.name == name and not row(i).done then return row(i) end
+    end
+end
+ns.db.includeStrangers, ns.db.autoHide, ns.db.groupBuffs = true, true, false
+units.party1.buffs = {}
+printed = {}
+SlashCmdList.FRIENDLYBUFFER("toggle shadowprot")
+check(entry(ns.db.priorities.WARRIOR, "shadowprot").enabled == true and printedMatch("activé pour tout le monde"), "/fb toggle active partout")
+SlashCmdList.FRIENDLYBUFFER("toggle Sort10958")
+check(entry(ns.db.priorities.WARRIOR, "shadowprot").enabled == false, "/fb toggle par nom du sort : coupe partout")
+SlashCmdList.FRIENDLYBUFFER("toggle")
+check(printedMatch("parmi"), "/fb toggle sans nom : liste des buffs")
+
+-- Ignorés : Maj+clic droit lance /fb ignore, le joueur sort de la liste
+local garrosh = rowOf("Garrosh")
+check(garrosh and garrosh.attrs["shift-type2"] == "macro" and garrosh.attrs["shift-macrotext2"] == "/fb ignore Garrosh", "Maj+clic droit : /fb ignore")
+SlashCmdList.FRIENDLYBUFFER("ignore Garrosh")
+check(rowOf("Garrosh") == nil and ns.db.ignored.Garrosh == true, "joueur ignoré : plus dans la liste")
+printed = {}
+SlashCmdList.FRIENDLYBUFFER("ignore")
+check(printedMatch("joueurs ignorés : Garrosh"), "/fb ignore sans nom : liste")
+SlashCmdList.FRIENDLYBUFFER("ignore Garrosh")
+check(rowOf("Garrosh") ~= nil and ns.db.ignored.Garrosh == nil, "même commande : de nouveau proposé")
+
+-- Familiers des membres du groupe
+units.partypet1 = { name = "Croc", class = "WARRIOR", level = 60, guid = "P1", buffs = {} }
+tick()
+check(rowOf("Croc") == nil, "familiers exclus par défaut")
+ns.db.includePets = true
+ns.OnSettingsChanged()
+check(rowOf("Croc") and rowOf("Croc").row.profile == "PET" and rowOf("Croc").attrs.macrotext1 == "/cast [@partypet1] Sort10938(Rang 1)", "familier du groupe : profil PET, /cast sur son unité")
+ns.db.includePets = false
+units.partypet1 = nil
+
+-- Buff personnel : proposé sur soi une fois les autres buffs posés
+units.player.buffs = {
+    { spellId = 10938, sourceUnit = "player", duration = 1800, expirationTime = now + 1800 },
+    { spellId = 27841, sourceUnit = "player", duration = 1800, expirationTime = now + 1800 },
+}
+ns.db.personal[1].enabled = true -- décoché par les clics du test des options
+ns.OnSettingsChanged()
+check(rowOf("Moi") and rowOf("Moi").row.need.family == "innerfire" and rowOf("Moi").attrs.macrotext1 == "/cast [@player] Sort10952(Rang 1)", "soi-même : feu intérieur")
+units.player.buffs[3] = { spellId = 10952, sourceUnit = "player", duration = 600, expirationTime = now + 600 }
+tick()
+check(rowOf("Moi") == nil, "feu intérieur posé : plus rien pour soi")
+
+-- Composants : alerte sous le seuil, seulement avec les buffs de groupe
+printed = {}
+fire("BAG_UPDATE_DELAYED")
+check(not printedMatch("il n'en reste que"), "composants : pas d'alerte sans buffs de groupe")
+ns.db.groupBuffs = true
+fire("BAG_UPDATE_DELAYED")
+check(printedMatch("il n'en reste que 5"), "composants : alerte au seuil")
+printed = {}
+fire("BAG_UPDATE_DELAYED")
+check(not printedMatch("il n'en reste que"), "composants : pas de rappel tant que le nombre ne baisse pas")
+ns.db.groupBuffs = false
+
+-- Priorités par contexte : en groupe ici
+printed = {}
+ns.db.contextPresets = true
+ns.OnSettingsChanged()
+check(ns.db.context == "party" and printedMatch("priorités utilisées : groupe"), "contexte : priorités de groupe annoncées")
+ns.db.contextPresets = false
+
+-- Raccourci clavier déclaré sur la première ligne
+check(_G["BINDING_NAME_CLICK FriendlyBufferRow1:LeftButton"] ~= nil and io.open("Bindings.xml"):read("*a"):match('CLICK FriendlyBufferRow1:LeftButton'), "raccourci : clic sur la première ligne")
 
 print = io.write
 if failures == 0 then io.stdout:write("smoke : OK\n") else io.stdout:write("smoke : " .. failures .. " échec(s)\n"); os.exit(1) end

@@ -1,0 +1,4 @@
+<Bindings>
+    <!-- Libellés : BINDING_HEADER_FRIENDLYBUFFER et BINDING_NAME_... dans FriendlyBuffer.lua -->
+    <Binding name="CLICK FriendlyBufferRow1:LeftButton" header="FRIENDLYBUFFER" category="ADDONS"/>
+</Bindings>

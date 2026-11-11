@@ -43,7 +43,8 @@ end
 ---------------------------------------------------------------------------
 
 local function clearAttributes(button)
-    for _, attr in ipairs({ "type1", "type2", "macrotext1", "macrotext2", "alt-type1", "alt-macrotext1" }) do
+    for _, attr in ipairs({ "type1", "type2", "macrotext1", "macrotext2", "alt-type1", "alt-macrotext1",
+        "shift-type2", "shift-macrotext2" }) do
         button:SetAttribute(attr, nil)
     end
 end
@@ -77,6 +78,9 @@ local function applyMacros(button, row, restore)
     -- Alt+clic gauche : sélectionner le joueur au lieu de le buffer.
     button:SetAttribute("alt-type1", "macro")
     button:SetAttribute("alt-macrotext1", row.isGroup and ("/target " .. button.unit) or ("/targetexact " .. row.name))
+    -- Maj+clic droit : ne plus proposer ce joueur.
+    button:SetAttribute("shift-type2", "macro")
+    button:SetAttribute("shift-macrotext2", "/fb ignore " .. row.name)
 end
 
 local function assign(button, row)
@@ -176,6 +180,7 @@ local function onEnter(button)
             GameTooltip:AddLine(string.format(L["Click: %s"], ns.SpellLabel(row.need.single)), 1, 1, 1)
         end
         GameTooltip:AddLine(L["Alt + left click: select"], 1, 1, 1)
+        GameTooltip:AddLine(L["Shift + right click: ignore this player"], 1, 1, 1)
         if not row.isGroup then GameTooltip:AddLine(L["Outside your group: targeted by name, then your previous target is restored"], 0.6, 0.6, 0.6) end
         if row.blocked then GameTooltip:AddLine(L["Behind an obstacle on the last attempt"], 0.6, 0.6, 0.6) end
     end
@@ -209,7 +214,7 @@ local function createButton(index)
     button:SetScript("PreClick", onPreClick)
     -- Mémorise le joueur cliqué : une erreur « pas en vue » juste après le concerne.
     button:SetScript("PostClick", function(self)
-        if self.row and not self.done and not IsAltKeyDown() then ns.NoteClick(self.row) end
+        if self.row and not self.done and not IsAltKeyDown() and not IsShiftKeyDown() then ns.NoteClick(self.row) end
     end)
     button:SetScript("OnEnter", onEnter)
     button:SetScript("OnLeave", GameTooltip_Hide)

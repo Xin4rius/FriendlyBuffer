@@ -29,6 +29,8 @@ local PROFILES = {
     { key = "PALADIN_HOLY",        class = "PALADIN", tab = 1, mana = true, blessings = { "wisdom", "kings", "salvation", "light" } },
     { key = "PALADIN_PROTECTION",  class = "PALADIN", tab = 2, mana = true, thorns = true, blessings = { "kings", "wisdom", "light", "sanctuary" } },
     { key = "PALADIN_RETRIBUTION", class = "PALADIN", tab = 3, mana = true, blessings = { "might", "kings", "salvation", "wisdom" } },
+    -- Familiers des membres du groupe (option « familiers ») : un seul profil, quelle que soit leur classe.
+    { key = "PET",                 class = "PET", thorns = true, blessings = { "might", "kings", "light" } },
 }
 
 ns.TARGET_PROFILES = {}       -- clés dans l'ordre d'affichage
@@ -76,6 +78,13 @@ local function paladinPriorities()
     return result
 end
 
+-- Buffs personnels (sur soi uniquement) : une seule liste, pas de profil de cible.
+local function personal(families, order, enabled)
+    local defaults = {}
+    for _, key in ipairs(order) do defaults[#defaults + 1] = { key = key, enabled = enabled[key] == true } end
+    return { mode = "cumulative", families = families, defaults = defaults }
+end
+
 -- reagent : composant propre à ce rang (sinon celui de la famille)
 local function r(id, level, power, reagent) return { id = id, level = level, power = power, reagent = reagent } end
 
@@ -117,6 +126,9 @@ ns.Spells = {
             },
         },
         defaults = paladinPriorities(),
+        personal = personal({
+            fury = { ranks = { r(25780, 16, 1) }, duration = 1800 },
+        }, { "fury" }, {}),
     },
 
     PRIEST = {
@@ -143,6 +155,12 @@ ns.Spells = {
             if key == "spirit" then return profile.mana == true end
             return false
         end),
+        personal = personal({
+            innerfire = {
+                ranks = { r(588, 12, 1), r(7128, 20, 2), r(602, 30, 3), r(1006, 40, 4), r(10951, 50, 5), r(10952, 60, 6) },
+                duration = 600,
+            },
+        }, { "innerfire" }, { innerfire = true }),
     },
 
     MAGE = {
@@ -155,16 +173,27 @@ ns.Spells = {
             },
             amplify = {
                 ranks = { r(1008, 18, 1), r(8455, 30, 2), r(10169, 42, 3), r(10170, 54, 4) },
-                duration = 600,
+                duration = 600, excl = "magic",
             },
             dampen = {
                 ranks = { r(604, 12, 1), r(8450, 24, 2), r(8451, 36, 3), r(10173, 48, 4), r(10174, 60, 5) },
-                duration = 600,
+                duration = 600, excl = "magic",
             },
         },
         defaults = uniformPriorities({ "intellect", "amplify", "dampen" }, function(profile, key)
             return key == "intellect" and profile.mana == true
         end),
+        personal = personal({
+            -- Armure de givre puis de glace : une seule lignée de rangs.
+            icearmor = {
+                ranks = { r(168, 1, 1), r(7300, 10, 2), r(7301, 20, 3), r(7302, 30, 4), r(7320, 40, 5), r(10219, 50, 6), r(10220, 60, 7) },
+                duration = 1800, excl = "armor",
+            },
+            magearmor = {
+                ranks = { r(6117, 34, 1), r(22782, 46, 2), r(22783, 58, 3) },
+                duration = 1800, excl = "armor",
+            },
+        }, { "magearmor", "icearmor" }, { icearmor = true }),
     },
 
     DRUID = {
@@ -184,20 +213,80 @@ ns.Spells = {
             if key == "mark" then return true end
             return profile.thorns == true
         end),
+        personal = personal({
+            omen = { ranks = { r(16864, 20, 1) }, duration = 600 }, -- talent
+        }, { "omen" }, { omen = true }),
+    },
+
+    WARLOCK = {
+        mode = "cumulative",
+        families = {
+            breath = { ranks = { r(5697, 16, 1) }, duration = 600 },
+            detect = { ranks = { r(132, 26, 1), r(2970, 38, 2), r(11743, 50, 3) }, duration = 600 },
+        },
+        defaults = uniformPriorities({ "breath", "detect" }, function() return false end),
+        personal = personal({
+            -- Peau de démon puis armure démoniaque : une seule lignée de rangs.
+            demonarmor = {
+                ranks = { r(687, 1, 1), r(696, 10, 2), r(706, 20, 3), r(1086, 30, 4), r(11733, 40, 5), r(11734, 50, 6), r(11735, 60, 7) },
+                duration = 1800,
+            },
+        }, { "demonarmor" }, { demonarmor = true }),
+    },
+
+    SHAMAN = {
+        mode = "cumulative",
+        families = {
+            waterbreath = { ranks = { r(131, 22, 1) }, duration = 600 },
+        },
+        defaults = uniformPriorities({ "waterbreath" }, function() return false end),
+        personal = personal({
+            lightning = {
+                ranks = { r(324, 8, 1), r(325, 16, 2), r(905, 24, 3), r(945, 32, 4), r(8134, 40, 5), r(10431, 48, 6), r(10432, 56, 7) },
+                duration = 600,
+            },
+        }, { "lightning" }, { lightning = true }),
+    },
+
+    -- Chasseur, guerrier : aucun buff à poser sur un autre joueur, seulement des buffs personnels.
+    HUNTER = {
+        mode = "cumulative",
+        families = {},
+        defaults = uniformPriorities({}, function() return false end),
+        personal = personal({
+            trueshot = { ranks = { r(19506, 40, 1), r(20905, 50, 2), r(20906, 60, 3) }, duration = 1800 }, -- talent
+        }, { "trueshot" }, { trueshot = true }),
+    },
+
+    WARRIOR = {
+        mode = "cumulative",
+        families = {},
+        defaults = uniformPriorities({}, function() return false end),
+        -- Coûte de la rage et ne dure que 2 min : désactivé par défaut.
+        personal = personal({
+            shout = {
+                ranks = { r(6673, 1, 1), r(5242, 12, 2), r(6192, 22, 3), r(11549, 32, 4), r(11550, 42, 5), r(11551, 52, 6), r(25289, 60, 7) },
+                duration = 120,
+            },
+        }, { "shout" }, {}),
     },
 }
 
 -- Index spellId -> { family, power, group } pour toutes les classes (on reconnaît aussi
 -- les buffs posés par d'autres joueurs d'une autre classe que la nôtre, sans effet ici).
 ns.SpellIndex = {}
+ns.FamilyExcl = {}          -- famille -> groupe de buffs qui se remplacent (excl), ou nil
 for class, data in pairs(ns.Spells) do
-    for key, fam in pairs(data.families) do
-        fam.key = key
-        for _, rank in ipairs(fam.ranks) do
-            ns.SpellIndex[rank.id] = { class = class, family = key, power = rank.power, group = false }
-        end
-        for _, rank in ipairs(fam.group or {}) do
-            ns.SpellIndex[rank.id] = { class = class, family = key, power = rank.power, group = true }
+    for _, families in ipairs({ data.families, data.personal.families }) do
+        for key, fam in pairs(families) do
+            fam.key = key
+            ns.FamilyExcl[key] = fam.excl
+            for _, rank in ipairs(fam.ranks) do
+                ns.SpellIndex[rank.id] = { class = class, family = key, power = rank.power, group = false }
+            end
+            for _, rank in ipairs(fam.group or {}) do
+                ns.SpellIndex[rank.id] = { class = class, family = key, power = rank.power, group = true }
+            end
         end
     end
 end

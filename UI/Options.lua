@@ -116,10 +116,9 @@ local function choice(parent, text, key, list, x, y)
 end
 
 local function familyLabel(key)
-    local fam = ns.classData.families[key]
-    local name, icon = ns.Compat.GetSpellInfo(fam.ranks[1].id)
-    if icon then return "|T" .. icon .. ":16|t " .. (name or key) end
-    return name or key
+    local name, icon = ns.FamilyName(ns.classData.families[key] or ns.classData.personal.families[key])
+    if icon then return "|T" .. icon .. ":16|t " .. name end
+    return name
 end
 
 local function buildPriorities(parent, y)
@@ -129,11 +128,17 @@ local function buildPriorities(parent, y)
     if not ns.classData then
         local none = label(parent, L["Your class has no buff supported by FriendlyBuffer."], "GameFontDisable")
         none:SetPoint("TOPLEFT", 16, y - 28)
-        return
+        return y - 60
+    end
+    -- Classe qui n'a que des buffs personnels : pas de priorités par cible.
+    if not ns.hasFamilies then
+        header:Hide()
+        return y
     end
 
     checkbox(parent, L["Detect the spec of players (inspection, out of combat)"], "detectSpecs", 16, y - 24)
-    y = y - 30
+    checkbox(parent, L["Separate priorities when solo, in a group and in a raid"], "contextPresets", 16, y - 50)
+    y = y - 56
 
     local profiles = ns.TARGET_PROFILES
     local profileList = {}
@@ -180,7 +185,7 @@ local function buildPriorities(parent, y)
         cb:SetScript("OnClick", function(self)
             local entry = list()[i]
             if not entry then return end
-            entry.enabled = self:GetChecked() and true or false
+            ns.Config.SetEnabled(list(), entry.key, self:GetChecked() and true or false)
             changed()
         end)
         up:SetScript("OnClick", function() if i > 1 and i <= #list() then swap(i, i - 1) end end)
@@ -209,9 +214,35 @@ local function buildPriorities(parent, y)
             end
         end
     end
+    return y - 56 - MAX_ENTRIES * 26 - 14
 end
 
-local CONTENT_WIDTH, CONTENT_HEIGHT = 640, 860
+-- Buffs personnels (sur soi) : une case par buff, le premier coché d'un groupe exclusif l'emporte.
+local function buildPersonal(parent, y)
+    if not ns.classData or #ns.db.personal == 0 then return end
+    local header = label(parent, L["Personal buffs (on yourself)"], "GameFontNormalLarge")
+    header:SetPoint("TOPLEFT", 16, y)
+    for i, entry in ipairs(ns.db.personal) do
+        local key = entry.key
+        -- ns.db.personal change de table avec le contexte : on retrouve l'entrée par sa clé.
+        -- Cocher un buff décoche celui qu'il remplace (les deux armures du mage).
+        local function current()
+            for _, e in ipairs(ns.db.personal) do
+                if e.key == key then return e end
+            end
+        end
+        local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+        cb:SetPoint("TOPLEFT", 16, y - 24 - (i - 1) * 26)
+        label(parent, familyLabel(key)):SetPoint("LEFT", cb, "RIGHT", 2, 1)
+        cb:SetScript("OnClick", function(self)
+            ns.Config.SetEnabled(ns.db.personal, key, self:GetChecked() and true or false)
+            changed()
+        end)
+        refreshers[#refreshers + 1] = function() cb:SetChecked(current().enabled) end
+    end
+end
+
+local CONTENT_WIDTH, CONTENT_HEIGHT = 640, 1040
 
 function Options.Create()
     panel = CreateFrame("Frame")
@@ -242,31 +273,41 @@ function Options.Create()
     checkbox(content, L["Discreet friendly nameplates (only the name is shown, click-through)"], "hiddenPlates", 40, -138)
     checkbox(content, L["Hide the window when nobody needs a buff"], "autoHide", 16, -164)
     checkbox(content, L["Lock the window position"], "locked", 16, -190)
+    checkbox(content, L["Include the pets of group members"], "includePets", 16, -216)
 
     local modes = {}
     for _, mode in ipairs(ns.Config.DISPLAY_MODES) do modes[#modes + 1] = { key = mode, label = DISPLAY_LABELS[mode] } end
-    choice(content, L["Display mode"], "displayMode", modes, 20, -226)
+    choice(content, L["Display mode"], "displayMode", modes, 20, -252)
 
-    stepper(content, L["Maximum number of rows"], "maxRows", 20, -256, 1, 1, 20, "%d")
-    stepper(content, L["Expiring soon (5/10 min buffs)"], "thresholdShort", 20, -282, 15, 15, 300, "%d s")
-    stepper(content, L["Expiring soon (30/60 min buffs)"], "thresholdLong", 20, -308, 30, 30, 900, "%d s")
-    stepper(content, L["Keep buffed players shown as OK for"], "doneDuration", 20, -334, 1, 0, 30, "%d s")
+    stepper(content, L["Maximum number of rows"], "maxRows", 20, -282, 1, 1, 20, "%d")
+    stepper(content, L["Expiring soon (5/10 min buffs)"], "thresholdShort", 20, -308, 15, 15, 300, "%d s")
+    stepper(content, L["Expiring soon (30/60 min buffs)"], "thresholdLong", 20, -334, 30, 30, 900, "%d s")
+    stepper(content, L["Keep buffed players shown as OK for"], "doneDuration", 20, -360, 1, 0, 30, "%d s")
+    stepper(content, L["Warn when group buff reagents drop to (0: never)"], "reagentWarn", 20, -386, 1, 0, 20, "%d")
 
     local namesHeader = label(content, L["Names on discreet nameplates"], "GameFontNormalLarge")
-    namesHeader:SetPoint("TOPLEFT", 16, -374)
-    choice(content, L["Font"], "plateFont", ns.Config.PLATE_FONTS, 20, -404)
-    choice(content, L["Outline"], "plateOutline", ns.Config.PLATE_OUTLINES, 20, -434)
-    stepper(content, L["Size"], "plateFontSize", 20, -462, 1, 8, 24, "%d")
-    checkbox(content, L["Shadow"], "plateShadow", 16, -484)
-    checkbox(content, L["Show the guild under the name"], "plateGuild", 16, -510)
+    namesHeader:SetPoint("TOPLEFT", 16, -426)
+    choice(content, L["Font"], "plateFont", ns.Config.PLATE_FONTS, 20, -456)
+    choice(content, L["Outline"], "plateOutline", ns.Config.PLATE_OUTLINES, 20, -486)
+    stepper(content, L["Size"], "plateFontSize", 20, -514, 1, 8, 24, "%d")
+    checkbox(content, L["Shadow"], "plateShadow", 16, -536)
+    checkbox(content, L["Show the guild under the name"], "plateGuild", 16, -562)
 
-    buildPriorities(content, -556)
+    buildPersonal(content, buildPriorities(content, -608))
 
     panel:SetScript("OnShow", function()
         for _, refresh in ipairs(refreshers) do refresh() end
     end)
     handle = ns.Compat.RegisterOptions(panel, "FriendlyBuffer")
 end
+
+-- Réglage changé ailleurs (commande, changement de contexte) : met à jour le panneau s'il est ouvert.
+function Options.Refresh()
+    if panel and panel:IsShown() then
+        for _, refresh in ipairs(refreshers) do refresh() end
+    end
+end
+
 function Options.Open()
     if handle then ns.Compat.OpenOptions(handle) end
 end
