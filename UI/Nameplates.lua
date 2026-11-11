@@ -73,6 +73,24 @@ local function applyFont(fontString)
     end
 end
 
+-- Échelle des noms selon le zoom de la caméra, comme les noms 3D du jeu sans Maj+V : taille
+-- choisie en vue rapprochée, puis de plus en plus petite en dézoomant.
+-- shortcut: seul le zoom compte, pas la distance de chaque allié (position des inconnus
+-- inaccessible aux addons) ; à revoir si une API de distance caméra-unité apparaît.
+local ZOOM_REFERENCE, MIN_SCALE = 30, 0.6
+
+local function zoomScale(zoom)
+    return math.max(MIN_SCALE, ZOOM_REFERENCE / (ZOOM_REFERENCE + zoom))
+end
+Nameplates.ZoomScale = zoomScale
+
+local function applyScale(frame, scale)
+    -- SetScale sur une région : absent des anciens clients, la taille reste alors fixe.
+    if not frame.friendlyBufferName.SetScale then return end
+    frame.friendlyBufferName:SetScale(scale)
+    frame.friendlyBufferGuild:SetScale(scale)
+end
+
 ---------------------------------------------------------------------------
 -- Texte affiché
 ---------------------------------------------------------------------------
@@ -112,7 +130,9 @@ end
 local function ownTexts(frame)
     if not frame.friendlyBufferName then
         local name = frame:CreateFontString(nil, "OVERLAY")
-        name:SetPoint("CENTER", frame, "CENTER", 0, 0)
+        -- La barre de nom flotte plus haut que le nom 3D du jeu : on redescend notre texte.
+        -- shortcut: décalage réglé à l'œil (géométrie de la barre non mesurable), à ajuster en jeu.
+        name:SetPoint("CENTER", frame, "CENTER", 0, -12)
         name:SetWordWrap(false)
         local guild = frame:CreateFontString(nil, "OVERLAY")
         guild:SetPoint("TOP", name, "BOTTOM", 0, -1)
@@ -158,6 +178,7 @@ local function keepOnlyName(frame, unit)
 
     local name, guildLine = ownTexts(frame)
     local r, g, b = selectionColor(unit)
+    if GetCameraZoom then applyScale(frame, zoomScale(GetCameraZoom())) end
     applyFont(name)
     name:SetText(text)
     name:SetTextColor(r, g, b)
@@ -188,6 +209,18 @@ if hooksecurefunc and CompactUnitFrame_UpdateName then
     hooksecurefunc("CompactUnitFrame_UpdateName", function(frame)
         local state = hidden[frame]
         if state then keepOnlyName(frame, state.unit) end
+    end)
+end
+
+-- Suit le zoom image par image : ne touche aux textes que lorsqu'il change.
+if GetCameraZoom then
+    local lastZoom
+    CreateFrame("Frame"):SetScript("OnUpdate", function()
+        local zoom = GetCameraZoom()
+        if zoom == lastZoom then return end
+        lastZoom = zoom
+        local scale = zoomScale(zoom)
+        for frame in pairs(hidden) do applyScale(frame, scale) end
     end)
 end
 

@@ -38,6 +38,7 @@ end
 function methods:RegisterEvent(e) self.events[e] = true end
 function methods:GetID() return 42 end
 function methods:SetAlpha(a) self.alpha = a end
+function methods:SetScale(s) self.scale = s end
 function methods:SetTextColor(r, g, b) self.color = { r, g, b } end
 function methods:GetTextColor() local c = rawget(self, "color") or { 1, 1, 1 }; return c[1], c[2], c[3] end
 function methods:SetFont(path, size, flags) self.font = { path, size, flags } end
@@ -105,6 +106,8 @@ _G.MenuUtil = {
 }
 _G.CreateFontFamily = function(name, members) return { name = name, members = members } end
 _G.GetGuildInfo = function(u) if u == "nameplate1" then return "Les Gardiens" end end
+local cameraZoom = 0
+_G.GetCameraZoom = function() return cameraZoom end
 local blizzardHooks = {}
 _G.hooksecurefunc = function(name, fn) blizzardHooks[name] = fn end
 _G.CompactUnitFrame_UpdateName = function(f) f.name:SetVertexColor(1, 1, 1) end
@@ -330,6 +333,14 @@ ns.db.plateOutline, ns.db.plateFontSize, ns.db.plateShadow, ns.db.plateFont = "t
 ns.OnSettingsChanged()
 fo = own.fontObject
 check(fo.members[1].file == "Fonts\\ARIALN.TTF" and fo.members[1].height == 14 and fo.members[1].flags == "THICKOUTLINE" and own.shadow[1] == 0, "style personnalisé appliqué")
+check(own.scale == 1 and uf.friendlyBufferGuild.scale == 1, "zoom au plus près : noms à taille pleine")
+cameraZoom = 10
+for _, o in ipairs(created) do if o.scripts.OnUpdate then o.scripts.OnUpdate(o, 0.02) end end
+check(own.scale == 0.75 and uf.friendlyBufferGuild.scale == 0.75,"dézoom : noms réduits comme les noms 3D")
+cameraZoom = 500
+ns.OnSettingsChanged()
+check(own.scale == 0.6,"dézoom extrême : taille plancher, noms toujours lisibles")
+cameraZoom = 0
 uf.name.text = "Autre Nom"
 if blizzardHooks.CompactUnitFrame_UpdateName then blizzardHooks.CompactUnitFrame_UpdateName(uf) end
 check(own.text == "Autre Nom", "texte suivi après une mise à jour de Blizzard")

@@ -289,7 +289,7 @@ function Options.Create()
     namesHeader:SetPoint("TOPLEFT", 16, -426)
     choice(content, L["Font"], "plateFont", ns.Config.PLATE_FONTS, 20, -456)
     choice(content, L["Outline"], "plateOutline", ns.Config.PLATE_OUTLINES, 20, -486)
-    stepper(content, L["Size"], "plateFontSize", 20, -514, 1, 8, 24, "%d")
+    stepper(content, L["Size"], "plateFontSize", 20, -514, 1, 8, 48, "%d")
     checkbox(content, L["Shadow"], "plateShadow", 16, -536)
     checkbox(content, L["Show the guild under the name"], "plateGuild", 16, -562)
 
