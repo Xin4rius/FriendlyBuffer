@@ -237,6 +237,17 @@ test("Config.Load : valeurs par défaut", function()
     eq(db.displayMode, "info"); eq(db.groupBuffs, false); eq(#db.priorities.WARRIOR, 3)
 end)
 
+test("SetFamilyForAll : tous les profils, autres familles intactes", function()
+    local db = ns.Config.Load({}, PRIEST)
+    ns.Config.SetFamilyForAll(db, "shadowprot", true)
+    for _, profile in ipairs(ns.TARGET_PROFILES) do
+        for _, entry in ipairs(db.priorities[profile]) do
+            if entry.key == "shadowprot" then eq(entry.enabled, true) end
+        end
+    end
+    eq(db.priorities.WARRIOR[2].key, "spirit"); eq(db.priorities.WARRIOR[2].enabled, false)
+end)
+
 test("Compare : urgence, groupe, nom", function()
     local rows = {
         { name = "Zed", isGroup = true, need = { reason = "lower" } },

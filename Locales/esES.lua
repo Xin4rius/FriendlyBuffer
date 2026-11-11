@@ -59,6 +59,7 @@ L["Your class has no buff supported by FriendlyBuffer."] = "Tu clase no tiene ni
 L["Reset"] = "Restablecer"
 L["Up"] = "Subir"
 L["Down"] = "Bajar"
+L["All classes"] = "Todas las clases"
 L["Lists nearby players to buff; click a name to cast the buff (Alt + click: select)."] = "Muestra los jugadores cercanos que necesitan un beneficio; haz clic en un nombre para lanzarlo (Alt + clic: seleccionar)."
 L["Use group / greater buffs (left click, group members)"] = "Usar beneficios de grupo / superiores (clic izquierdo, miembros del grupo)"
 L["Include players outside your group (friendly nameplates, target)"] = "Incluir jugadores fuera de tu grupo (placas de nombre amistosas, objetivo)"

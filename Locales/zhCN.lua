@@ -59,6 +59,7 @@ L["Your class has no buff supported by FriendlyBuffer."] = "你的职业没有 F
 L["Reset"] = "重置"
 L["Up"] = "上移"
 L["Down"] = "下移"
+L["All classes"] = "所有职业"
 L["Lists nearby players to buff; click a name to cast the buff (Alt + click: select)."] = "列出附近需要增益的玩家；点击名字即可施放增益（Alt + 点击：选为目标）。"
 L["Use group / greater buffs (left click, group members)"] = "使用团体 / 强效增益（左键，队伍成员）"
 L["Include players outside your group (friendly nameplates, target)"] = "包含队伍外的玩家（友方姓名板、目标）"

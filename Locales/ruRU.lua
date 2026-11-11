@@ -59,6 +59,7 @@ L["Your class has no buff supported by FriendlyBuffer."] = "У вашего кл
 L["Reset"] = "Сбросить"
 L["Up"] = "Вверх"
 L["Down"] = "Вниз"
+L["All classes"] = "Все классы"
 L["Lists nearby players to buff; click a name to cast the buff (Alt + click: select)."] = "Показывает игроков поблизости, которым нужен бафф; нажмите на имя, чтобы наложить его (Alt + клик: выбрать цель)."
 L["Use group / greater buffs (left click, group members)"] = "Использовать групповые / великие баффы (левый клик, члены группы)"
 L["Include players outside your group (friendly nameplates, target)"] = "Учитывать игроков вне группы (дружественные индикаторы, цель)"

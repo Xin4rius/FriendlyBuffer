@@ -92,3 +92,12 @@ end
 function Config.ResetPriorities(db, classData, profile)
     db.priorities[profile] = copyList(classData.defaults[profile])
 end
+
+-- Active ou coupe une famille pour tous les profils (l'ordre de chacun est gardé).
+function Config.SetFamilyForAll(db, key, enabled)
+    for _, list in pairs(db.priorities) do
+        for _, entry in ipairs(list) do
+            if entry.key == key then entry.enabled = enabled end
+        end
+    end
+end

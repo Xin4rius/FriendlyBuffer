@@ -59,6 +59,7 @@ L["Your class has no buff supported by FriendlyBuffer."] = "FriendlyBuffer가 �
 L["Reset"] = "초기화"
 L["Up"] = "위로"
 L["Down"] = "아래로"
+L["All classes"] = "모든 직업"
 L["Lists nearby players to buff; click a name to cast the buff (Alt + click: select)."] = "버프가 필요한 주변 플레이어를 보여줍니다. 이름을 클릭하면 버프를 시전합니다 (Alt + 클릭: 대상 선택)."
 L["Use group / greater buffs (left click, group members)"] = "파티 / 상급 버프 사용 (왼쪽 클릭, 파티원)"
 L["Include players outside your group (friendly nameplates, target)"] = "파티 밖 플레이어 포함 (우호적 이름표, 대상)"

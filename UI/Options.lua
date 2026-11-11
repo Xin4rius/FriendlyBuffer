@@ -167,7 +167,9 @@ local function buildPriorities(parent, y)
         up:SetPoint("TOPLEFT", 270, rowY - 3)
         local down = smallButton(parent, L["Down"], 50, nil)
         down:SetPoint("LEFT", up, "RIGHT", 4, 0)
-        rows[i] = { cb = cb, text = text, up = up, down = down }
+        local all = smallButton(parent, L["All classes"], 120, nil)
+        all:SetPoint("LEFT", down, "RIGHT", 4, 0)
+        rows[i] = { cb = cb, text = text, up = up, down = down, all = all }
 
         local function list() return ns.db.priorities[profiles[selectedProfile]] end
         local function swap(a, b)
@@ -183,6 +185,13 @@ local function buildPriorities(parent, y)
         end)
         up:SetScript("OnClick", function() if i > 1 and i <= #list() then swap(i, i - 1) end end)
         down:SetScript("OnClick", function() if i < #list() then swap(i, i + 1) end end)
+        -- Bascule la famille de cette ligne, puis applique le même état à tous les profils.
+        all:SetScript("OnClick", function()
+            local entry = list()[i]
+            if not entry then return end
+            ns.Config.SetFamilyForAll(ns.db, entry.key, not entry.enabled)
+            changed()
+        end)
     end
 
     refreshers[#refreshers + 1] = function()
@@ -190,7 +199,7 @@ local function buildPriorities(parent, y)
         for i, row in ipairs(rows) do
             local entry = list[i]
             local visible = entry ~= nil
-            row.cb:SetShown(visible); row.text:SetShown(visible); row.up:SetShown(visible); row.down:SetShown(visible)
+            row.cb:SetShown(visible); row.text:SetShown(visible); row.up:SetShown(visible); row.down:SetShown(visible); row.all:SetShown(visible)
             if visible then
                 row.cb:SetChecked(entry.enabled)
                 row.text:SetText(i .. ". " .. familyLabel(entry.key))
