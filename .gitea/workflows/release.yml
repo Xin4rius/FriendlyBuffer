@@ -31,8 +31,12 @@ jobs:
 
       # Script plutôt que l'action : act ne résout pas le tag v2 du packager (« unsupported object type »).
       # Notes de version : CHANGELOG.md (.pkgmeta, manual-changelog), jamais les messages de commit.
+      # Sans clé, le packager construit le zip mais n'envoie rien, sans erreur : on échoue avant.
       - name: Package and upload
-        run: curl -s https://raw.githubusercontent.com/BigWigsMods/packager/v2/release.sh | bash -s -- -p "$PROJECT_ID"
+        run: |
+          [ -n "$CF_API_KEY" ] || { echo "::error::Secret CF_API_KEY manquant : rien ne serait envoyé sur CurseForge"; exit 1; }
+          [ -n "$PROJECT_ID" ] || { echo "::error::Variable CURSEFORGE_PROJECT_ID manquante"; exit 1; }
+          curl -s https://raw.githubusercontent.com/BigWigsMods/packager/v2/release.sh | bash -s -- -p "$PROJECT_ID"
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
           PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
