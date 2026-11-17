@@ -7,3 +7,7 @@ ignore:
   - README.md
   - README.fr.md
   - Media/logo.png
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
