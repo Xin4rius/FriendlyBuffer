@@ -9,7 +9,7 @@ local MAX_LEVEL = 60
 -- Un rang de niveau requis L ne peut être posé que sur une cible de niveau >= L - 10.
 local LEVEL_GAP = 10
 
-Decision.URGENCY = { missing = 1, expiring = 2, lower = 3 }
+Decision.URGENCY = { dead = 0, missing = 1, expiring = 2, lower = 3 }
 
 -- Meilleur rang connu et utilisable sur une cible de ce niveau, ou nil.
 function Decision.BestRank(ranks, isKnown, targetLevel)
@@ -101,6 +101,14 @@ local function evaluateExclusive(classData, ctx, target)
     for _, aura in ipairs(target.auras) do
         if aura.mine and classData.families[aura.family] then mine = aura break end
     end
+    -- Bénédiction attribuée par la coordination entre paladins, tant que personne d'autre ne l'a posée :
+    -- elle remplace ma bénédiction actuelle si c'en est une autre.
+    local assigned = ctx.assigned and enabled[ctx.assigned] and classData.families[ctx.assigned]
+    if assigned and strongestAura(target.auras, assigned.key, function(a) return not a.mine end) then assigned = nil end
+    if assigned and (not mine or mine.family ~= assigned.key) then
+        local single = Decision.BestRank(assigned.ranks, ctx.isKnown, target.level)
+        if single then return makeNeed(assigned, "missing", nil, single, ctx, target) end
+    end
     if mine and enabled[mine.family] then
         return familyNeed(classData.families[mine.family], mine, ctx, target)
     end
@@ -120,7 +128,8 @@ local function evaluateExclusive(classData, ctx, target)
 end
 
 -- classData : ns.Spells[classe du joueur]
--- ctx : { isKnown = function(spellId), settings = {thresholdShort, thresholdLong, groupBuffs}, priorities = { {key, enabled}, ... } }
+-- ctx : { isKnown = function(spellId), settings = {thresholdShort, thresholdLong, groupBuffs}, priorities = { {key, enabled}, ... },
+--         assigned = clé de la bénédiction attribuée par la coordination (paladin, optionnel) }
 -- target : { level, isGroup, auras = { {family, power, mine, remaining, duration}, ... } }
 -- Retourne { family, reason, remaining, single = rang, group = rang|nil } ou nil.
 function Decision.Evaluate(classData, ctx, target)
@@ -129,6 +138,81 @@ function Decision.Evaluate(classData, ctx, target)
         return evaluateExclusive(classData, ctx, target)
     end
     return evaluateCumulative(classData, ctx, target)
+end
+
+-- Familles qui manquent (ou expirent, ou d'un rang inférieur) sur la cible, pour les compteurs.
+-- Cumulatif : chacune des familles activées ; exclusif : la bénédiction qu'on poserait.
+-- Retourne { [clé] = true }, et les familles activées et utilisables sur cette cible.
+function Decision.Missing(classData, ctx, target)
+    local missing, wanted = {}, {}
+    if not classData or not ctx.priorities then return missing, wanted end
+    if classData.mode == "exclusive" then
+        local need = evaluateExclusive(classData, ctx, target)
+        if need then missing[need.family] = true end
+        return missing, wanted
+    end
+    local taken = {}
+    for _, entry in ipairs(ctx.priorities) do
+        local fam = classData.families[entry.key]
+        local usable = entry.enabled and fam and Decision.BestRank(fam.ranks, ctx.isKnown, target.level) ~= nil
+        if usable and fam.excl then
+            usable = not taken[fam.excl]
+            taken[fam.excl] = true
+        end
+        if usable then
+            wanted[fam.key] = true
+            if familyNeed(fam, strongestAura(target.auras, fam.key), ctx, target) then missing[fam.key] = true end
+        end
+    end
+    return missing, wanted
+end
+
+-- Joueur mort à relever : meilleur rang connu du sort de résurrection (sans limite de niveau).
+function Decision.Resurrect(rez, isKnown)
+    local rank = rez and Decision.BestRank(rez.ranks, isKnown)
+    if not rank then return nil end
+    return { family = rez.key, reason = "dead", single = rank }
+end
+
+-- Version de groupe seulement si au moins `min` joueurs de la même portée en ont besoin
+-- (même groupe du raid, ou même classe pour les bénédictions supérieures) ; sinon la version
+-- individuelle passe au clic gauche. scopeOf(row) -> clé de portée.
+function Decision.ApplyGroupMin(rows, min, scopeOf)
+    local counts = {}
+    local function key(row) return row.need.family .. "|" .. tostring(scopeOf(row)) end
+    for _, row in ipairs(rows) do
+        if row.need.group then counts[key(row)] = (counts[key(row)] or 0) + 1 end
+    end
+    for _, row in ipairs(rows) do
+        if row.need.group and counts[key(row)] < min then row.need.group = nil end
+    end
+end
+
+-- Sorts de dissipation utilisables, dans l'ordre des clics : { {key, types, rank}, ... } (2 au plus).
+-- Un sort dont tous les types sont déjà couverts par un précédent est inutile (Purification
+-- une fois Épuration apprise).
+function Decision.DispelSpells(list, isKnown)
+    local spells, covered = {}, {}
+    for _, entry in ipairs(list or {}) do
+        local rank = Decision.BestRank(entry.ranks, isKnown)
+        local useful = false
+        for t in pairs(entry.types) do
+            if not covered[t] then useful = true end
+        end
+        if rank and useful and #spells < 2 then
+            spells[#spells + 1] = { key = entry.key, types = entry.types, rank = rank }
+            for t in pairs(entry.types) do covered[t] = true end
+        end
+    end
+    return spells
+end
+
+-- Index (1 = clic gauche, 2 = clic droit) du sort qui retire ce type de débuff, ou nil.
+function Decision.DispelIndex(spells, debuffType)
+    for i, spell in ipairs(spells) do
+        if debuffType and spell.types[debuffType] then return i end
+    end
+    return nil
 end
 
 -- Composants des versions de groupe que le joueur connaît (meilleur rang de chaque famille),

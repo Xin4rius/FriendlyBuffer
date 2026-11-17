@@ -14,7 +14,13 @@
 ## IconTexture: Interface\AddOns\FriendlyBuffer\Media\icon
 ## Author: Xin4rius
 ## Version: 1.2.1
+## SavedVariables: FriendlyBufferDB
 ## SavedVariablesPerCharacter: FriendlyBufferCharDB
+
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
 
 Locales\Locale.lua
 Locales\frFR.lua
@@ -33,7 +39,10 @@ Core\Auras.lua
 Core\Decision.lua
 Core\Scanner.lua
 Core\Specs.lua
+Core\Coord.lua
 UI\MainFrame.lua
 UI\Nameplates.lua
+UI\Dispel.lua
+UI\Minimap.lua
 UI\Options.lua
 FriendlyBuffer.lua

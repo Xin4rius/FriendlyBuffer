@@ -290,3 +290,34 @@ for class, data in pairs(ns.Spells) do
         end
     end
 end
+
+-- Résurrection hors combat, par classe (le druide n'a que Renaissance : recharge de 30 min, exclue).
+ns.Resurrection = {
+    PRIEST = { key = "resurrect", ranks = { r(2006, 10, 1), r(2010, 22, 2), r(10880, 34, 3), r(10881, 46, 4), r(20770, 58, 5) } },
+    PALADIN = { key = "resurrect", ranks = { r(7328, 12, 1), r(10322, 24, 2), r(10324, 36, 3), r(20772, 48, 4), r(20773, 60, 5) } },
+    SHAMAN = { key = "resurrect", ranks = { r(2008, 12, 1), r(20609, 24, 2), r(20610, 36, 3), r(20776, 48, 4), r(20777, 60, 5) } },
+}
+
+-- Dissipations par classe, dans l'ordre des clics (gauche, droit). types : types de débuffs
+-- retirés ; ranks : versions du sort (Abolir l'emporte sur Guérir une fois connu).
+ns.Dispels = {
+    PRIEST = {
+        { key = "dispelmagic", types = { Magic = true }, ranks = { r(527, 18, 1), r(988, 36, 2) } },
+        { key = "curedisease", types = { Disease = true }, ranks = { r(528, 14, 1), r(552, 32, 2) } },
+    },
+    PALADIN = {
+        { key = "cleanse", types = { Magic = true, Poison = true, Disease = true }, ranks = { r(4987, 42, 1) } },
+        { key = "purify", types = { Poison = true, Disease = true }, ranks = { r(1152, 8, 1) } },
+    },
+    DRUID = {
+        { key = "removecurse", types = { Curse = true }, ranks = { r(2782, 24, 1) } },
+        { key = "curepoison", types = { Poison = true }, ranks = { r(8946, 14, 1), r(2893, 26, 2) } },
+    },
+    MAGE = {
+        { key = "removecurse", types = { Curse = true }, ranks = { r(475, 18, 1) } },
+    },
+    SHAMAN = {
+        { key = "curepoison", types = { Poison = true }, ranks = { r(526, 16, 1) } },
+        { key = "curedisease", types = { Disease = true }, ranks = { r(2870, 22, 1) } },
+    },
+}

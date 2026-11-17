@@ -30,6 +30,39 @@ function Compat.GetBuffs(unit)
     return list
 end
 
+-- Débuffs lisibles (hors combat) : { {name, icon, dispelName}, ... }.
+function Compat.GetDebuffs(unit)
+    local list = {}
+    if C_UnitAuras and C_UnitAuras.GetDebuffDataByIndex then
+        for i = 1, MAX_BUFFS do
+            local data = C_UnitAuras.GetDebuffDataByIndex(unit, i)
+            if not data then break end
+            list[#list + 1] = { name = data.name, icon = data.icon, dispelName = data.dispelName }
+        end
+    elseif UnitDebuff then
+        for i = 1, MAX_BUFFS do
+            local name, icon, _, debuffType = UnitDebuff(unit, i)
+            if not name then break end
+            list[#list + 1] = { name = name, icon = icon, dispelName = debuffType }
+        end
+    end
+    return list
+end
+
+-- Auras secrètes (combat) : le client filtre lui-même les débuffs que le joueur peut retirer.
+-- Retourne présent (true/false, nil si inconnu), icône (peut être secrète : seulement pour
+-- SetTexture), type de débuff ou nil s'il est secret.
+function Compat.DispellableSecret(unit)
+    if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return nil end
+    local ok, data = pcall(C_UnitAuras.GetAuraDataByIndex, unit, 1, "HARMFUL|RAID_PLAYER_DISPELLABLE")
+    if not ok then return nil end
+    if data == nil then return false end
+    if Compat.IsSecret(data) then return nil end
+    local dtype = data.dispelName
+    if Compat.IsSecret(dtype) then dtype = nil end
+    return true, data.icon, dtype
+end
+
 -- Retourne nom, icône ou nil si le sort n'existe pas sur ce client.
 function Compat.GetSpellInfo(spellId)
     if C_Spell and C_Spell.GetSpellInfo then

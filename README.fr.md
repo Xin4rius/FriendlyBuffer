@@ -28,6 +28,8 @@ inférieur** à ce que vous pouvez lui poser (en tenant compte de son niveau).
 - `/fb reset` : replace la fenêtre au centre
 - `/fb toggle <buff>` : active / coupe un buff pour tout le monde (pratique en macro)
 - `/fb ignore <nom>` : ignore un joueur, ou cesse de l'ignorer (Maj + clic droit sur sa ligne) ; sans nom, liste les ignorés
+- `/fb dispel` : déplacer la fenêtre de dissipation (même commande pour finir)
+- Bouton de la minicarte : clic gauche = fenêtre, clic droit = options, glisser = le déplacer
 - Raccourci clavier « buffer le premier joueur de la liste » : Options → Raccourcis → AddOns
 
 Joueurs hors groupe : WoW ne les rend visibles aux addons qu'à travers les **barres de nom
@@ -65,6 +67,34 @@ s'appliquent. L'infobulle d'une ligne indique la spé détectée.
   pendant 5 secondes.
 - **Alt + clic gauche** : sélectionne le joueur au lieu de le buffer.
 
+- **Morts** (prêtre, paladin, chaman) : les membres du groupe morts passent en tête de liste ; un
+  clic lance la résurrection. Une fois le sort lancé, le joueur n'est plus proposé pendant 60 s, le
+  temps qu'il accepte.
+- **Compteurs** (mode informatif, en groupe) : sous la liste, « posés / total » pour chaque buff ; le
+  détail au survol de la fenêtre. Au ready check, les buffs manquants sont rappelés dans le chat.
+- **Version de groupe intelligente** : la version de groupe n'est proposée au clic gauche que si au
+  moins N joueurs (2 par défaut) du même groupe du raid, ou de la même classe pour les bénédictions
+  supérieures, en ont besoin ; sinon, la version individuelle.
+
+## Coordination
+
+Les joueurs de FriendlyBuffer d'un même groupe s'annoncent entre eux (messages d'addon, sans rien
+dans le chat). Paladins : chacun reçoit une bénédiction par classe de cible, dans l'ordre des
+priorités (le premier prend Rois, le deuxième Sagesse, etc.) ; si un paladin sans l'addon l'a déjà
+posée, on revient au choix habituel. Prêtres, mages, druides en raid : les groupes du raid sont
+répartis à tour de rôle entre joueurs de la même classe. `/fb debug` affiche la répartition.
+
+## Fenêtre de dissipation
+
+Prêtre, paladin, druide, mage, chaman : une petite grille sans fond ni cadre (une ligne par groupe
+du raid) où n'apparaît que la case d'un membre du groupe portant un débuff que vous pouvez retirer :
+icône du débuff, bordure de la couleur de son type, nom du joueur. Clic gauche : premier sort de
+dissipation (prêtre : magie ; druide : malédiction ; chaman : poison ; paladin : Épuration), clic droit :
+le second (maladie, poison…). En combat, les cases vides restent en place mais invisibles (WoW
+interdit de les masquer) ; les auras étant secrètes en combat sur ce client, la détection s'appuie alors
+sur le filtre « débuffs que je peux dissiper » du jeu, sans connaître le type (bordure grise).
+`/fb debug` sur une cible indique si les deux lectures la voient.
+
 ## Options
 
 - Buffs de groupe / supérieurs (clic gauche : version de groupe, clic droit : version individuelle)
@@ -78,6 +108,9 @@ s'appliquent. L'infobulle d'une ligne indique la spé détectée.
   et cyrilliques.
 - Détection de la spé des joueurs (inspection), activée par défaut
 - Priorités des buffs par classe et spé de cible : réordonner, activer ou désactiver chaque buff
+- Copier les priorités d'un autre personnage de la même classe (sauvegardées à la déconnexion)
+- Résurrection, rappel au ready check, coordination, bouton de la minicarte, seuil de la version de groupe
+- Fenêtre de dissipation : activée, noms sur les cases, taille des cases, déplacer
 
 ## Langues
 

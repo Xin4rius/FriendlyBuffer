@@ -242,7 +242,28 @@ local function buildPersonal(parent, y)
     end
 end
 
-local CONTENT_WIDTH, CONTENT_HEIGHT = 640, 1040
+-- Copie des priorités d'un autre personnage de la même classe (sauvegarde du compte).
+local function buildCopy(parent, y)
+    local sources = {}
+    for key, char in pairs(FriendlyBufferDB and FriendlyBufferDB.chars or {}) do
+        if char.class == ns.playerClass and key ~= ns.CharKey() then sources[#sources + 1] = { key = key, label = key } end
+    end
+    if not ns.hasFamilies or #sources == 0 then return y end
+    table.sort(sources, function(a, b) return a.key < b.key end)
+    local selected = sources[1].key
+    settingLabel(parent, L["Copy the priorities of"], 20, y)
+    local widget = selector(parent, sources, function() return selected end, function(value) selected = value end, 180)
+    widget:SetPoint("TOPLEFT", 20 + CONTROL_OFFSET, y + 5)
+    local copy = smallButton(parent, L["Copy"], 80, function()
+        ns.Config.CopyFrom(ns.db, ns.classData, FriendlyBufferDB.chars[selected])
+        ns.Print(string.format(L["priorities copied from %s."], selected))
+        changed()
+    end)
+    copy:SetPoint("LEFT", widget, "RIGHT", 8, 0)
+    return y - 32
+end
+
+local CONTENT_WIDTH, CONTENT_HEIGHT = 640, 1380
 
 function Options.Create()
     panel = CreateFrame("Frame")
@@ -284,16 +305,37 @@ function Options.Create()
     stepper(content, L["Expiring soon (30/60 min buffs)"], "thresholdLong", 20, -334, 30, 30, 900, "%d s")
     stepper(content, L["Keep buffed players shown as OK for"], "doneDuration", 20, -360, 1, 0, 30, "%d s")
     stepper(content, L["Warn when group buff reagents drop to (0: never)"], "reagentWarn", 20, -386, 1, 0, 20, "%d")
+    stepper(content, L["Group version from this many players to buff (same group / class)"], "groupMin", 20, -412, 1, 1, 10, "%d")
+    checkbox(content, L["Remind missing buffs on a ready check"], "readyCheck", 16, -434)
+    checkbox(content, L["Share the work with other FriendlyBuffer users of the group"], "coordinate", 16, -460)
+    checkbox(content, L["Minimap button"], "minimap", 16, -486)
+    local y = -512
+    if ns.Resurrection[ns.playerClass] then
+        checkbox(content, L["List dead group members to resurrect"], "resurrect", 16, y)
+        y = y - 26
+    end
+    y = buildCopy(content, y - 6)
+
+    if ns.Dispels[ns.playerClass] then
+        local dispelHeader = label(content, L["Dispel window"], "GameFontNormalLarge")
+        dispelHeader:SetPoint("TOPLEFT", 16, y - 14)
+        checkbox(content, L["Show the group members carrying a debuff you can remove"], "dispel", 16, y - 38)
+        checkbox(content, L["Names on the squares"], "dispelNames", 16, y - 64)
+        stepper(content, L["Square size"], "dispelSize", 20, y - 94, 2, 16, 48, "%d")
+        local move = smallButton(content, L["Move"], 120, function() ns.Dispel.ToggleMove() end)
+        move:SetPoint("TOPLEFT", 20, y - 120)
+        y = y - 150
+    end
 
     local namesHeader = label(content, L["Names on discreet nameplates"], "GameFontNormalLarge")
-    namesHeader:SetPoint("TOPLEFT", 16, -426)
-    choice(content, L["Font"], "plateFont", ns.Config.PLATE_FONTS, 20, -456)
-    choice(content, L["Outline"], "plateOutline", ns.Config.PLATE_OUTLINES, 20, -486)
-    stepper(content, L["Size"], "plateFontSize", 20, -514, 1, 8, 48, "%d")
-    checkbox(content, L["Shadow"], "plateShadow", 16, -536)
-    checkbox(content, L["Show the guild under the name"], "plateGuild", 16, -562)
+    namesHeader:SetPoint("TOPLEFT", 16, y - 14)
+    choice(content, L["Font"], "plateFont", ns.Config.PLATE_FONTS, 20, y - 44)
+    choice(content, L["Outline"], "plateOutline", ns.Config.PLATE_OUTLINES, 20, y - 74)
+    stepper(content, L["Size"], "plateFontSize", 20, y - 102, 1, 8, 48, "%d")
+    checkbox(content, L["Shadow"], "plateShadow", 16, y - 124)
+    checkbox(content, L["Show the guild under the name"], "plateGuild", 16, y - 150)
 
-    buildPersonal(content, buildPriorities(content, -608))
+    buildPersonal(content, buildPriorities(content, y - 196))
 
     panel:SetScript("OnShow", function()
         for _, refresh in ipairs(refreshers) do refresh() end
@@ -309,5 +351,10 @@ function Options.Refresh()
 end
 
 function Options.Open()
+    -- Le panneau des options de WoW est interdit aux addons en combat.
+    if InCombatLockdown() then
+        ns.Print(L["not possible during combat."])
+        return
+    end
     if handle then ns.Compat.OpenOptions(handle) end
 end

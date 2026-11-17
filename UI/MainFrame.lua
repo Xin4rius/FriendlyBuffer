@@ -9,6 +9,7 @@ ns.MainFrame = MainFrame
 local ROW_HEIGHT = 18
 local TITLE_HEIGHT = 20
 local PADDING = 6
+local SUMMARY_HEIGHT = 16
 local WIDTH = { minimal = 150, info = 210 }
 local MAX_ROWS_LIMIT = 20
 
@@ -16,13 +17,14 @@ local REASON_COLORS = {
     missing = { 1, 0.25, 0.25 },
     expiring = { 1, 0.6, 0.1 },
     lower = { 1, 0.9, 0.2 },
+    dead = { 0.75, 0.75, 1 },
 }
-local REASON_LABELS = { missing = L["missing"], expiring = L["expiring"], lower = L["lower rank"] }
+local REASON_LABELS = { missing = L["missing"], expiring = L["expiring"], lower = L["lower rank"], dead = L["dead"] }
 local BLOCKED_COLOR = { 0.6, 0.6, 0.6 }
 
 local frame, buttons = nil, {}
 local pending = false     -- une reconstruction complète attend la fin du combat / du survol
-local lastRows, lastDone = {}, {}
+local lastRows, lastDone, lastCounters = {}, {}, {}
 
 local function formatTime(seconds)
     if not seconds then return "" end
@@ -229,10 +231,19 @@ local function updateTitle(total)
     frame.title:SetText(text)
 end
 
+-- Compteurs par buff (mode informatif, en groupe) : « icône posés/total » sous la liste.
+local function summaryText(counters)
+    if ns.db.displayMode == "minimal" or not IsInGroup() then return "" end
+    local parts = {}
+    for _, item in ipairs(ns.SortedCounters(counters)) do parts[#parts + 1] = ns.CounterLabel(item.key, item.c, true) end
+    return table.concat(parts, "  ")
+end
+
 local function layout(shown)
     local mode = ns.db.displayMode
     frame:SetWidth(WIDTH[mode] or WIDTH.minimal)
-    frame:SetHeight(TITLE_HEIGHT + math.max(shown, 1) * ROW_HEIGHT + PADDING)
+    local summary = frame.summary:GetText() ~= nil and frame.summary:GetText() ~= ""
+    frame:SetHeight(TITLE_HEIGHT + math.max(shown, 1) * ROW_HEIGHT + PADDING + (summary and SUMMARY_HEIGHT or 0))
 end
 
 local function shouldShow(total)
@@ -317,11 +328,13 @@ local function combatRender(rows)
     pending = true
 end
 
-function MainFrame.Render(rows, doneRows)
+function MainFrame.Render(rows, doneRows, counters)
     if not frame then return end
     doneRows = doneRows or {}
-    lastRows, lastDone = rows, doneRows
+    lastRows, lastDone, lastCounters = rows, doneRows, counters or {}
     updateTitle(#rows)
+    -- En combat la hauteur de la fenêtre est figée : le texte change, sa place non.
+    if not InCombatLockdown() or (frame.summary:GetText() or "") ~= "" then frame.summary:SetText(summaryText(lastCounters)) end
     if InCombatLockdown() then
         combatRender(rows)
     elseif frame:IsShown() and frame:IsMouseOver() then
@@ -377,6 +390,7 @@ function MainFrame.Create()
         savePosition()
     end)
     frame:SetScript("OnLeave", function(self)
+        GameTooltip_Hide()
         if not self:IsMouseOver() then MainFrame.Flush() end
     end)
 
@@ -384,6 +398,25 @@ function MainFrame.Create()
     frame.title:SetPoint("TOPLEFT", PADDING + 2, -6)
     frame.title:SetPoint("RIGHT", -PADDING, 0)
     frame.title:SetJustifyH("LEFT")
+
+    frame.summary = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.summary:SetPoint("BOTTOMLEFT", PADDING + 2, PADDING)
+    frame.summary:SetPoint("RIGHT", -PADDING, 0)
+    frame.summary:SetJustifyH("LEFT")
+    frame.summary:SetWordWrap(false)
+
+    -- Infobulle de la fenêtre : compteurs détaillés du groupe.
+    frame:SetScript("OnEnter", function(self)
+        local list = ns.SortedCounters(lastCounters)
+        if #list == 0 then return end
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine(L["Group buffs (in place / total)"])
+        for _, item in ipairs(list) do
+            local c = item.c
+            GameTooltip:AddLine(ns.CounterLabel(item.key, c), c.missing > 0 and 1 or 0.4, c.missing > 0 and 0.6 or 1, 0.4)
+        end
+        GameTooltip:Show()
+    end)
 
     for i = 1, MAX_ROWS_LIMIT do
         buttons[i] = createButton(i)

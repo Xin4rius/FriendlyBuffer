@@ -79,10 +79,36 @@ local CLICK_WATCH = 10    -- délai max entre le clic et la disparition du besoi
 local recentClicks = {}   -- guid -> { time, row }
 local doneUntil = {}      -- guid -> { untilTime, row }
 
+-- Résurrections : le joueur relevé reste mort tant qu'il n'a pas accepté (60 s au plus) ;
+-- on ne le propose plus pendant ce temps.
+local REZ_PENDING = 60
+local REZ_WINDOW = 15     -- délai max entre le clic et la fin du sort
+local rezzedUntil = {}    -- guid -> GetTime() de fin
+local lastRezClick
+
 function ns.NoteClick(row)
     local now = GetTime()
     lastClick = { guid = row.guid, time = now }
     recentClicks[row.guid] = { time = now, row = row }
+    if row.dead then lastRezClick = { guid = row.guid, time = now } end
+end
+
+local function onSpellSucceeded(unit, spellId)
+    if unit ~= "player" or not lastRezClick or ns.Compat.IsSecret(spellId) then return end
+    local isRez = false
+    for _, rank in ipairs((ns.Resurrection[ns.playerClass] or { ranks = {} }).ranks) do
+        if rank.id == spellId then isRez = true end
+    end
+    if not isRez or GetTime() - lastRezClick.time > REZ_WINDOW then return end
+    rezzedUntil[lastRezClick.guid] = GetTime() + REZ_PENDING
+    lastRezClick = nil
+    ns.RequestScan()
+end
+
+local function rezPending(candidate, now)
+    local untilTime = rezzedUntil[candidate.guid]
+    if untilTime and untilTime <= now then rezzedUntil[candidate.guid], untilTime = nil, nil end
+    return untilTime ~= nil or (UnitHasIncomingResurrection ~= nil and UnitHasIncomingResurrection(candidate.unit) == true)
 end
 
 -- Lignes « OK » à afficher sous `rows` (les joueurs qui ont encore besoin d'un buff).
@@ -132,23 +158,62 @@ local function isBlocked(guid, now)
     return true
 end
 
+-- Compteurs par buff sur les membres du groupe (joueurs vivants, à portée ou non) :
+-- clé -> { missing, total }. Les bénédictions (une seule par paladin) n'ont qu'un compteur, "*".
+local function count(counters, ctx, target)
+    local missing, wanted = ns.Decision.Missing(ns.classData, ctx, target)
+    if ns.classData.mode == "exclusive" then missing, wanted = { ["*"] = next(missing) and true or nil }, { ["*"] = true } end
+    for key in pairs(wanted) do
+        local c = counters[key] or { missing = 0, total = 0 }
+        counters[key] = c
+        c.total = c.total + 1
+        if missing[key] then c.missing = c.missing + 1 end
+    end
+end
+
+-- Portée d'une version de groupe : le groupe du raid, ou la classe (bénédictions supérieures).
+local function groupScope(row)
+    if ns.classData.mode == "exclusive" then return row.class end
+    return row.subgroup
+end
+
 -- stats (optionnel) : compte les joueurs écartés, pour /fb debug.
--- Retourne aussi les GUIDs des joueurs vus qui n'ont besoin de rien.
+-- Retourne aussi les GUIDs des joueurs vus qui n'ont besoin de rien, et les compteurs par buff.
 local function buildRows(stats)
-    local rows, satisfied = {}, {}
-    if not ns.classData then return rows, satisfied end
+    local rows, satisfied, counters = {}, {}, {}
+    if not ns.classData then return rows, satisfied, counters end
     local db = ns.db
     local now = GetTime()
     local ctx = { isKnown = ns.Compat.IsKnown, settings = db }
     -- Classe sans buff à poser sur autrui : seul le joueur lui-même compte (buffs personnels).
     local others = ns.hasFamilies
-    for _, candidate in ipairs(ns.Scanner.Collect(others and db.includeStrangers, others and db.includePets)) do
+    local rez = db.resurrect and ns.Resurrection[ns.playerClass]
+    ns.Coord.Prepare()
+    for _, candidate in ipairs(ns.Scanner.Collect(others and db.includeStrangers, others and db.includePets, rez ~= nil)) do
         local isSelf = UnitIsUnit(candidate.unit, "player")
-        if (others or isSelf) and not db.ignored[candidate.name] then
+        if candidate.dead then
+            local need = not db.ignored[candidate.name] and ns.Decision.Resurrect(rez, ns.Compat.IsKnown)
+            if need and rezPending(candidate, now) then
+                satisfied[candidate.guid] = true
+            elseif need and ns.Compat.InRange(need.single.id, candidate.unit) ~= false then
+                candidate.need = need
+                candidate.blocked = isBlocked(candidate.guid, now)
+                rows[#rows + 1] = candidate
+            end
+        elseif (others or isSelf) and not db.ignored[candidate.name] then
             candidate.profile = ns.Specs.ProfileFor(candidate)
             local target = { level = candidate.level, isGroup = candidate.isGroup, auras = ns.Auras.Read(candidate.unit) }
             ctx.priorities = db.priorities[candidate.profile]
-            local need = ns.Decision.Evaluate(ns.classData, ctx, target)
+            ctx.assigned = ns.Coord.Assigned(candidate.profile, ctx.priorities)
+            if others and candidate.isGroup and not candidate.isPet then count(counters, ctx, target) end
+            local need
+            -- En raid, un autre joueur de ma classe s'occupe de ce groupe.
+            if others and candidate.isGroup and not isSelf and ns.Coord.OtherSubgroup(candidate.subgroup) then
+                if stats then stats.otherPeer = stats.otherPeer + 1 end
+            else
+                need = ns.Decision.Evaluate(ns.classData, ctx, target)
+            end
+            ctx.assigned = nil
             -- Soi-même : à défaut, un buff personnel.
             if not need and isSelf then
                 ctx.priorities = db.personal
@@ -166,8 +231,27 @@ local function buildRows(stats)
             end
         end
     end
+    if db.groupBuffs then ns.Decision.ApplyGroupMin(rows, db.groupMin, groupScope) end
     table.sort(rows, ns.Decision.Compare)
-    return rows, satisfied
+    return rows, satisfied, counters
+end
+
+-- Libellé d'un compteur : nom (ou icône) du buff, déjà posés / total.
+function ns.CounterLabel(key, c, withIcon)
+    local name, icon = L["Blessings"], nil
+    if key ~= "*" then name, icon = ns.FamilyName(ns.classData.families[key]) end
+    local prefix = (withIcon and icon) and ("|T" .. icon .. ":14|t ") or (name .. " ")
+    return prefix .. (c.total - c.missing) .. "/" .. c.total
+end
+
+-- Compteurs triés par clé : { {key, c}, ... } ; seulement ceux où il manque quelque chose si onlyMissing.
+function ns.SortedCounters(counters, onlyMissing)
+    local list = {}
+    for key, c in pairs(counters or {}) do
+        if not onlyMissing or c.missing > 0 then list[#list + 1] = { key = key, c = c } end
+    end
+    table.sort(list, function(a, b) return a.key < b.key end)
+    return list
 end
 
 local dirty, sinceScan, sinceTick = true, 0, 0
@@ -185,8 +269,9 @@ local function scan()
         say(string.format(L["priorities in use: %s."], ns.Config.CONTEXTS[ns.db.context]))
         ns.Options.Refresh()
     end
-    local rows, satisfied = buildRows()
-    ns.MainFrame.Render(rows, doneRows(rows, satisfied, GetTime()))
+    local rows, satisfied, counters = buildRows()
+    ns.counters = counters
+    ns.MainFrame.Render(rows, doneRows(rows, satisfied, GetTime()), counters)
     if ns.db.hiddenPlates then ns.Nameplates.Refresh() end
     ns.Specs.Update()
 end
@@ -195,6 +280,8 @@ function ns.RequestScan() dirty = true end
 
 function ns.OnSettingsChanged()
     ns.Nameplates.Apply()
+    ns.Dispel.Refresh()
+    ns.Minimap.Refresh()
     scan()
 end
 
@@ -250,10 +337,15 @@ local function debugScan()
     end
     local parts = {}
     for reason, count in pairs(rejected) do parts[#parts + 1] = reason .. "=" .. count end
-    local stats = { outOfRange = 0 }
+    local stats = { outOfRange = 0, otherPeer = 0 }
     local count = #buildRows(stats)
     say(string.format(L["scan: %d candidates (%d in group, %d outside), %d to buff, %d out of range; rejected: %s"],
         #candidates, group, strangers, count, stats.outOfRange, #parts > 0 and table.concat(parts, ", ") or L["none"]))
+    local coordinated, index = ns.Coord.Status()
+    if coordinated > 1 then
+        say(string.format(L["coordination: %d players of your class with FriendlyBuffer (you are #%d); %d left to them"],
+            coordinated, index or 0, stats.otherPeer))
+    end
     local function yesNo(value) return value and L["yes"] or L["no"] end
     say(string.format(L["strangers included: %s; friendly nameplates: %s; window hidden by /fb: %s"],
         yesNo(ns.db.includeStrangers),
@@ -275,6 +367,11 @@ local function debugTarget()
             tostring(raw.sourceUnit), tostring(raw.duration), tostring(raw.expirationTime),
             info and ("-> " .. info.family .. " power " .. info.power) or ""))
     end
+    if ns.Dispels[ns.playerClass] then
+        local readable, combat = ns.Dispel.Diagnose(unit)
+        say(string.format(L["dispel on %s: debuff to remove %s; combat filter: %s"], UnitName(unit) or "?",
+            readable and L["yes"] or L["no"], combat == nil and L["unavailable"] or (combat and L["yes"] or L["no"])))
+    end
     if not ns.classData then
         say(L["your class has no supported buff."])
         return
@@ -293,6 +390,14 @@ local function debugTarget()
     end
 end
 
+-- Ready check : rappelle ce qui manque au groupe.
+local function onReadyCheck()
+    if not ns.db.readyCheck or not ns.hasFamilies or not ns.counters then return end
+    local parts = {}
+    for _, item in ipairs(ns.SortedCounters(ns.counters, true)) do parts[#parts + 1] = ns.CounterLabel(item.key, item.c) end
+    if #parts > 0 then say(string.format(L["ready check, buffs missing: %s"], table.concat(parts, ", "))) end
+end
+
 local function toggleWindow()
     if InCombatLockdown() then
         say(L["not possible during combat."])
@@ -302,6 +407,7 @@ local function toggleWindow()
     say(ns.db.hidden and L["window hidden (/fb to show it again)."] or L["window shown."])
     scan()
 end
+ns.ToggleWindow = toggleWindow
 
 -- Familles (de cible ou personnelles) désignées par leur clé, leur nom ou un bout de leur nom,
 -- et les noms de toutes les familles de la classe.
@@ -378,9 +484,12 @@ SlashCmdList.FRIENDLYBUFFER = function(input)
         toggleFamily(arg)
     elseif cmd == "ignore" then
         toggleIgnore(arg)
+    elseif cmd == "dispel" or cmd == "dissipation" then
+        ns.Dispel.ToggleMove()
     else
         say(L["/fb (show/hide), /fb options, /fb debug (analyze your target), /fb plates (friendly nameplates), /fb reset (position)"])
         say(L["/fb toggle <buff> (on/off for everyone), /fb ignore <name> (ignore or stop ignoring a player; no name: list)"])
+        say(L["/fb dispel (move the dispel window)"])
     end
 end
 
@@ -394,8 +503,18 @@ local SCAN_EVENTS = {
     "UNIT_AURA", "GROUP_ROSTER_UPDATE", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
     "PLAYER_TARGET_CHANGED", "UNIT_LEVEL", "SPELLS_CHANGED", "PLAYER_ENTERING_WORLD", "UNIT_FLAGS",
     "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "UI_ERROR_MESSAGE", "INSPECT_READY",
-    "CHARACTER_POINTS_CHANGED", "BAG_UPDATE_DELAYED",
+    "CHARACTER_POINTS_CHANGED", "BAG_UPDATE_DELAYED", "READY_CHECK", "UNIT_SPELLCAST_SUCCEEDED", "CHAT_MSG_ADDON",
 }
+
+-- Priorités de chaque personnage, pour les copier d'un personnage à l'autre (Options).
+function ns.CharKey()
+    return (UnitName("player") or "?") .. " - " .. (GetRealmName and GetRealmName() or "")
+end
+
+local function saveCharacter()
+    if not ns.db or not ns.classData then return end
+    FriendlyBufferDB.chars[ns.CharKey()] = { class = ns.playerClass, priorities = ns.db.priorities, personal = ns.db.personal }
+end
 
 local function onLogin()
     local _, class = UnitClass("player")
@@ -403,12 +522,16 @@ local function onLogin()
     ns.classData = ns.Spells[class]
     ns.hasFamilies = ns.classData ~= nil and next(ns.classData.families) ~= nil
     FriendlyBufferCharDB = FriendlyBufferCharDB or {}
+    FriendlyBufferDB = FriendlyBufferDB or {}
+    FriendlyBufferDB.chars = FriendlyBufferDB.chars or {}
     ns.db = ns.Config.Load(FriendlyBufferCharDB, ns.classData)
     ns.Specs.Init(ns.db)
 
     indexSpellNames()
     ns.MainFrame.Create()
+    ns.Dispel.Create()
     ns.Options.Create()
+    events:RegisterEvent("PLAYER_LOGOUT")
 
     if not ns.classData then
         say(L["your class has no supported buff; the addon stays inactive."])
@@ -417,6 +540,9 @@ local function onLogin()
     say(string.format(L["loaded (%s). /fb options for settings, /fb debug if something is wrong."], (UnitClass("player"))))
     ns.Nameplates.Apply()
     warnNameplates()
+    ns.Minimap.Create()
+    ns.Coord.Init()
+    ns.Coord.Announce()
 
     for _, event in ipairs(SCAN_EVENTS) do events:RegisterEvent(event) end
     -- Nos propres inspections passent aussi par là : sans conséquence (simple délai).
@@ -424,13 +550,14 @@ local function onLogin()
     events:SetScript("OnUpdate", function(_, elapsed)
         sinceScan = sinceScan + elapsed
         sinceTick = sinceTick + elapsed
+        ns.Coord.Tick()
         if (dirty and sinceScan >= SCAN_THROTTLE) or sinceTick >= TICK then scan() end
     end)
     scan()
 end
 
 events:RegisterEvent("PLAYER_LOGIN")
-events:SetScript("OnEvent", function(_, event, unit, arg2)
+events:SetScript("OnEvent", function(_, event, unit, arg2, ...)
     if event == "PLAYER_LOGIN" then
         onLogin()
     elseif event == "PLAYER_ENTERING_WORLD" then
@@ -440,8 +567,17 @@ events:SetScript("OnEvent", function(_, event, unit, arg2)
         ns.Nameplates.Apply()
         scan()
         ns.MainFrame.Flush()
+    elseif event == "PLAYER_LOGOUT" then
+        saveCharacter()
     elseif event == "BAG_UPDATE_DELAYED" then
         checkReagents()
+    elseif event == "READY_CHECK" then
+        scan()
+        onReadyCheck()
+    elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+        onSpellSucceeded(unit, (...)) -- unité, castGUID, spellId
+    elseif event == "CHAT_MSG_ADDON" then
+        ns.Coord.OnMessage(unit, arg2)
     elseif event == "UI_ERROR_MESSAGE" then
         onUIError(unit, arg2)
     elseif event == "INSPECT_READY" then
@@ -453,6 +589,7 @@ events:SetScript("OnEvent", function(_, event, unit, arg2)
         ns.Nameplates.Removed(unit)
         ns.RequestScan()
     else
+        if event == "GROUP_ROSTER_UPDATE" or event == "SPELLS_CHANGED" then ns.Coord.Announce() end
         ns.RequestScan()
     end
 end)

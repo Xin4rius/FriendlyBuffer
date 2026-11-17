@@ -49,6 +49,14 @@ local DEFAULTS = {
     includePets = false,    -- familiers des membres du groupe
     reagentWarn = 5,        -- prévient quand il reste ce nombre de composants de groupe ou moins (0 = jamais)
     contextPresets = false, -- priorités distinctes seul / en groupe / en raid
+    resurrect = true,       -- membres du groupe morts dans la liste (prêtre, paladin, chaman)
+    groupMin = 2,           -- version de groupe à partir de ce nombre de joueurs à buffer (même groupe / classe)
+    readyCheck = true,      -- rappel des buffs manquants au ready check
+    coordinate = true,      -- répartition avec les autres joueurs de FriendlyBuffer du groupe
+    dispel = true,          -- fenêtre de dissipation
+    dispelSize = 26,        -- taille des cases de la fenêtre de dissipation
+    dispelNames = true,     -- nom du joueur sur sa case
+    minimap = true,         -- bouton de la minicarte
 }
 
 Config.CONTEXTS = { solo = L["solo"], party = L["group"], raid = L["raid"] }
@@ -96,6 +104,7 @@ function Config.Load(db, classData)
     -- L'ancien mode « range » (grisé hors portée) n'existe plus : les joueurs hors portée sont exclus.
     if db.displayMode == "range" then db.displayMode = "info" end
     db.ignored = db.ignored or {}
+    db.minimapIcon = db.minimapIcon or {} -- position et visibilité, gérées par LibDBIcon
     normalize(db, classData)
     return db
 end
@@ -117,6 +126,21 @@ function Config.SwitchContext(db, classData, context)
     db.context = context
     normalize(db, classData)
     return true
+end
+
+local function deepCopy(value)
+    if type(value) ~= "table" then return value end
+    local out = {}
+    for k, v in pairs(value) do out[k] = deepCopy(v) end
+    return out
+end
+
+-- Reprend les priorités (et buffs personnels) d'un autre personnage de la même classe.
+-- source : { class, priorities, personal } (sauvegarde du compte).
+function Config.CopyFrom(db, classData, source)
+    db.priorities = deepCopy(source.priorities or {})
+    db.personal = deepCopy(source.personal or {})
+    normalize(db, classData)
 end
 
 function Config.ResetPriorities(db, classData, profile)

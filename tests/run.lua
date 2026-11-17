@@ -1,7 +1,7 @@
 -- Tests hors jeu : lancer depuis la racine de l'addon avec `lua tests/run.lua`.
 GetLocale = function() return "enUS" end
 local ns = {}
-for _, file in ipairs({ "Locales/Locale.lua", "Data/Spells.lua", "Core/Decision.lua", "Core/Auras.lua", "Core/Config.lua", "Core/Specs.lua" }) do
+for _, file in ipairs({ "Locales/Locale.lua", "Data/Spells.lua", "Core/Decision.lua", "Core/Auras.lua", "Core/Config.lua", "Core/Specs.lua", "Core/Coord.lua" }) do
     assert(loadfile(file))("FriendlyBuffer", ns)
 end
 
@@ -421,7 +421,125 @@ end)
 
 -- Traductions --------------------------------------------------------------
 
-local SOURCES = { "FriendlyBuffer.lua", "Core/Config.lua", "Core/Scanner.lua", "Core/Specs.lua", "UI/MainFrame.lua", "UI/Options.lua", "UI/Nameplates.lua" }
+-- Résurrection, compteurs, version de groupe ------------------------------------
+
+test("Resurrect : meilleur rang connu, sans limite de niveau", function()
+    local need = ns.Decision.Resurrect(ns.Resurrection.PRIEST, knows({ [2006] = true, [2010] = true }))
+    eq(need.single.id, 2010); eq(need.reason, "dead"); eq(need.family, "resurrect")
+    eq(ns.Decision.Resurrect(ns.Resurrection.PRIEST, knows({})), nil, "sort non appris")
+    eq(ns.Decision.Resurrect(nil, knowsAll), nil, "classe sans résurrection")
+end)
+
+test("Resurrect : les morts passent avant les autres besoins", function()
+    local rows = {
+        { name = "A", isGroup = true, need = { reason = "missing" } },
+        { name = "B", isGroup = true, need = { reason = "dead" } },
+    }
+    table.sort(rows, ns.Decision.Compare)
+    eq(rows[1].name, "B")
+end)
+
+test("Missing : cumulatif, chaque famille activée qui manque", function()
+    local missing, wanted = ns.Decision.Missing(PRIEST, ctxFor("PRIEST", "MAGE"), { level = 60, auras = { aura("fortitude", 6) } })
+    eq(missing.fortitude, nil, "robustesse posée"); eq(missing.spirit, true, "esprit manquant")
+    eq(wanted.fortitude, true); eq(wanted.spirit, true); eq(wanted.shadowprot, nil, "famille désactivée")
+end)
+
+test("Missing : exclusif, la bénédiction qu'on poserait", function()
+    local missing = ns.Decision.Missing(PALADIN, ctxFor("PALADIN", "PRIEST"), { level = 60, auras = {} })
+    eq(missing.wisdom, true); eq(missing.kings, nil)
+end)
+
+test("ApplyGroupMin : version de groupe seulement à partir du seuil, par portée", function()
+    local function row(scope) return { scope = scope, need = { family = "fortitude", group = { id = 1 } } } end
+    local rows = { row(1), row(1), row(2) }
+    ns.Decision.ApplyGroupMin(rows, 2, function(r) return r.scope end)
+    eq(rows[1].need.group ~= nil, true, "groupe 1 : deux joueurs")
+    eq(rows[3].need.group, nil, "groupe 2 : un seul joueur -> individuel")
+    local single = { row(1) }
+    ns.Decision.ApplyGroupMin(single, 1, function(r) return r.scope end)
+    eq(single[1].need.group ~= nil, true, "seuil 1 : toujours la version de groupe")
+end)
+
+-- Dissipation ----------------------------------------------------------------
+
+test("DispelSpells : paladin, Purification inutile une fois Épuration apprise", function()
+    local spells = ns.Decision.DispelSpells(ns.Dispels.PALADIN, knowsAll)
+    eq(#spells, 1); eq(spells[1].key, "cleanse")
+    spells = ns.Decision.DispelSpells(ns.Dispels.PALADIN, knows({ [1152] = true }))
+    eq(#spells, 1); eq(spells[1].key, "purify")
+end)
+
+test("DispelSpells : prêtre, magie au clic gauche, maladie au clic droit, meilleur rang", function()
+    local spells = ns.Decision.DispelSpells(ns.Dispels.PRIEST, knowsAll)
+    eq(spells[1].rank.id, 988, "Dissipation de la magie rang 2"); eq(spells[2].rank.id, 552, "Abolir maladie")
+    eq(ns.Decision.DispelIndex(spells, "Magic"), 1); eq(ns.Decision.DispelIndex(spells, "Disease"), 2)
+    eq(ns.Decision.DispelIndex(spells, "Curse"), nil, "malédiction : rien"); eq(ns.Decision.DispelIndex(spells, nil), nil)
+end)
+
+test("DispelSpells : sort non appris ignoré", function()
+    local spells = ns.Decision.DispelSpells(ns.Dispels.DRUID, knows({ [8946] = true }))
+    eq(#spells, 1); eq(spells[1].key, "curepoison")
+end)
+
+-- Coordination ---------------------------------------------------------------
+
+test("Coord.Assign : chacun la première bénédiction libre qu'il connaît", function()
+    local all = { might = true, wisdom = true, kings = true }
+    local players = { { guid = "A", families = all }, { guid = "B", families = { wisdom = true, might = true } }, { guid = "C", families = all } }
+    local order = { "kings", "wisdom", "might" }
+    eq(ns.Coord.Assign(players, order, "A"), "kings")
+    eq(ns.Coord.Assign(players, order, "B"), "wisdom", "B n'a pas Rois")
+    eq(ns.Coord.Assign(players, order, "C"), "might")
+    eq(ns.Coord.Assign({ { guid = "A", families = all }, { guid = "D", families = {} } }, order, "D"), nil, "rien à prendre")
+end)
+
+test("Coord.OwnsSubgroup : groupes répartis à tour de rôle", function()
+    eq(ns.Coord.OwnsSubgroup(1, 2, 1), true); eq(ns.Coord.OwnsSubgroup(2, 2, 2), true)
+    eq(ns.Coord.OwnsSubgroup(1, 2, 3), true); eq(ns.Coord.OwnsSubgroup(1, 2, 2), false)
+end)
+
+test("Coord : message encodé puis décodé, messages invalides rejetés", function()
+    local text = ns.Coord.Encode("Player-1-0ABC", "PALADIN", { wisdom = true, kings = true })
+    eq(text, "H:Player-1-0ABC:PALADIN:kings,wisdom")
+    local msg = ns.Coord.Decode(text)
+    eq(msg.guid, "Player-1-0ABC"); eq(msg.class, "PALADIN"); eq(msg.families.kings, true)
+    eq(ns.Coord.Decode("H:Creature-1:PALADIN:kings"), nil, "pas un joueur")
+    eq(ns.Coord.Decode("H:Player-1:paladin:kings"), nil, "classe mal formée")
+    eq(ns.Coord.Decode("X" .. string.rep("a", 300)), nil, "trop long")
+    eq(ns.Coord.Decode(nil), nil)
+end)
+
+test("Paladin : bénédiction attribuée par la coordination", function()
+    local ctx = ctxFor("PALADIN", "PRIEST")
+    ctx.assigned = "kings"
+    local need = ns.Decision.Evaluate(PALADIN, ctx, { level = 60, auras = {} })
+    eq(need.family, "kings", "au lieu de sagesse")
+    need = ns.Decision.Evaluate(PALADIN, ctx, { level = 60, auras = { aura("wisdom", 6, { mine = true, remaining = 200, duration = 300 }) } })
+    eq(need.family, "kings", "remplace ma sagesse")
+    need = ns.Decision.Evaluate(PALADIN, ctx, { level = 60, auras = { aura("kings", 1), aura("wisdom", 6, { mine = true, remaining = 200, duration = 300 }) } })
+    eq(need, nil, "rois déjà posé par un autre : ma sagesse reste")
+    ctx.assigned = "sanctuary" -- désactivée pour ce profil : ignorée
+    need = ns.Decision.Evaluate(PALADIN, ctx, { level = 60, auras = {} })
+    eq(need.family, "wisdom")
+end)
+
+-- Copie entre personnages ----------------------------------------------------
+
+test("CopyFrom : priorités copiées (pas partagées) et remises en accord avec la classe", function()
+    local src = ns.Config.Load({}, PRIEST)
+    ns.Config.SetFamilyForAll(src, "shadowprot", true)
+    src.priorities.WARRIOR[#src.priorities.WARRIOR + 1] = { key = "inconnue", enabled = true }
+    local db = ns.Config.Load({}, PRIEST)
+    ns.Config.CopyFrom(db, PRIEST, { class = "PRIEST", priorities = src.priorities, personal = src.personal })
+    eq(db.priorities.WARRIOR[3].enabled, true, "copiée")
+    eq(#db.priorities.WARRIOR, 3, "famille inconnue retirée")
+    db.priorities.WARRIOR[3].enabled = false
+    eq(src.priorities.WARRIOR[3].enabled, true, "source intacte")
+end)
+
+local SOURCES = { "FriendlyBuffer.lua", "Core/Config.lua", "Core/Scanner.lua", "Core/Specs.lua", "UI/MainFrame.lua", "UI/Options.lua", "UI/Nameplates.lua",
+    "Core/Coord.lua", "UI/Dispel.lua", "UI/Minimap.lua" }
 local LOCALES = { frFR = "frFR", deDE = "deDE", esES = "esES", esMX = "esES", itIT = "itIT", ptBR = "ptBR",
     ruRU = "ruRU", koKR = "koKR", zhCN = "zhCN", zhTW = "zhTW" }
 

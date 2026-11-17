@@ -156,18 +156,37 @@ local printed = {}
 _G.SPELL_FAILED_LINE_OF_SIGHT = "La cible n'est pas en vue"
 _G.print = function(...) printed[#printed + 1] = table.concat({ ... }, " ") end
 
+-- Bibliothèques embarquées (Libs/) : code tiers non chargé ici, remplacé par un LibStub minimal.
+local dataObjects, dbIcons = {}, {}
+local fakeLibs = {
+    ["LibDataBroker-1.1"] = {
+        NewDataObject = function(_, name, obj) dataObjects[name] = obj; return obj end,
+        GetDataObjectByName = function(_, name) return dataObjects[name] end,
+    },
+    ["LibDBIcon-1.0"] = {
+        Register = function(_, name, obj, db) dbIcons[name] = { obj = obj, db = db, shown = not db.hide } end,
+        Show = function(_, name) dbIcons[name].shown = true end,
+        Hide = function(_, name) dbIcons[name].shown = false end,
+    },
+}
+_G.LibStub = setmetatable({}, { __call = function(_, name) return fakeLibs[name] end })
+
 -- Chargement dans l'ordre du .toc ---------------------------------------------
 local ns = {}
 for line in io.lines("FriendlyBuffer.toc") do
-    if line:match("%.lua$") then
+    if line:match("%.lua$") and not line:match("^Libs") then
         assert(loadfile((line:gsub("\\", "/"))))("FriendlyBuffer", ns)
     end
 end
 
+-- La dernière frame qui attend PLAYER_LOGIN : celle de FriendlyBuffer.lua (chargé en dernier ;
+-- LibDBIcon en a une aussi).
 local function eventFrame()
+    local found
     for _, o in ipairs(created) do
-        if o.events.PLAYER_LOGIN then return o end
+        if o.events.PLAYER_LOGIN then found = o end
     end
+    return found
 end
 local ev = eventFrame()
 local function fire(event, ...) ev.scripts.OnEvent(ev, event, ...) end
@@ -280,6 +299,9 @@ check(row(1).row.name == "Jaina", "curseur parti : tri complet rétabli")
 
 -- Groupe : option buffs de groupe
 ns.db.groupBuffs = true
+ns.OnSettingsChanged()
+check(row(1).attrs.macrotext1:match("Sort27841") and row(1).attrs.macrotext2:match("Sort27841"), "un seul joueur du groupe à buffer : version individuelle aux deux clics")
+ns.db.groupMin = 1
 ns.OnSettingsChanged()
 check(row(1).attrs.macrotext1:match("Sort27681") and row(1).attrs.macrotext2:match("Sort27841"), "clic gauche groupe / clic droit individuel")
 
@@ -448,6 +470,106 @@ ns.db.contextPresets = true
 ns.OnSettingsChanged()
 check(ns.db.context == "party" and printedMatch("priorités utilisées : groupe"), "contexte : priorités de groupe annoncées")
 ns.db.contextPresets = false
+
+-- Résurrection : Garrosh mort -> en tête ; une fois le sort lancé, plus proposé le temps qu'il accepte
+-- Le test des options a tout décoché (GetChecked simulé) : on rétablit les nouvelles options.
+ns.db.resurrect, ns.db.readyCheck, ns.db.dispel, ns.db.coordinate, ns.db.minimap = true, true, true, true, true
+ns.OnSettingsChanged()
+_G.UnitIsDeadOrGhost = function(u) return U(u) ~= nil and U(u).dead == true end
+units.party1.dead = true
+tick()
+local deadRow = rowOf("Garrosh")
+check(deadRow == row(1) and deadRow.row.need.reason == "dead" and deadRow.attrs.macrotext1 == "/cast [@party1] Sort20770(Rang 1)", "mort du groupe : résurrection en tête")
+deadRow.scripts.PostClick(deadRow, "LeftButton")
+fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-1", 20770)
+tick()
+check(rowOf("Garrosh") == nil, "résurrection lancée : plus proposé")
+now = now + 61
+tick()
+check(rowOf("Garrosh") ~= nil, "résurrection refusée ou expirée : de nouveau proposé")
+ns.db.resurrect = false
+tick()
+check(rowOf("Garrosh") == nil, "option coupée : morts exclus")
+ns.db.resurrect = true
+units.party1.dead = nil
+
+-- Compteurs et ready check
+tick()
+check(FriendlyBufferFrame.summary.text:match("%d/%d"), "compteurs posés/total sous la liste (mode informatif)")
+printed = {}
+fire("READY_CHECK")
+check(printedMatch("buffs manquants"), "ready check : buffs manquants annoncés")
+
+-- Fenêtre de dissipation (prêtre : magie au clic gauche, maladie au clic droit)
+_G.C_UnitAuras.GetDebuffDataByIndex = function(u, i) return U(u) and U(u).debuffs and U(u).debuffs[i] end
+local dev
+for _, o in ipairs(created) do if o.events.UNIT_AURA and not o.events.PLAYER_LOGIN then dev = o end end
+local function aurasChanged(unit) dev.scripts.OnEvent(dev, "UNIT_AURA", unit); dev.scripts.OnUpdate(dev, 0.2) end
+local slot2, slot3 = _G.FriendlyBufferDispel2, _G.FriendlyBufferDispel3
+units.party2.debuffs = { { name = "Venin", icon = 7, dispelName = "Poison" }, { name = "Sort", icon = 9, dispelName = "Magic" } }
+aurasChanged("party2")
+check(slot3.unit == "party2" and slot3.shown and slot3.alpha == 1, "dissipation : case de Jaina visible")
+check(slot3.attrs.macrotext1 == "/cast [@party2] Sort988(Rang 1)" and slot3.attrs.macrotext2 == "/cast [@party2] Sort552(Rang 1)", "dissipation : clic gauche magie, clic droit maladie")
+check(slot2.shown == false, "dissipation : case vide masquée hors combat")
+if slot3.scripts.OnEnter then slot3.scripts.OnEnter(slot3) end
+units.party2.debuffs = { { name = "Venin", icon = 7, dispelName = "Poison" } }
+aurasChanged("party2")
+check(slot3.shown == false, "dissipation : poison, rien à retirer pour un prêtre")
+-- Combat : auras secrètes, on s'en remet au filtre du client
+_G.C_Secrets = { ShouldAurasBeSecret = function() return inCombat end }
+_G.C_UnitAuras.GetAuraDataByIndex = function(u, _, filter)
+    if filter == "HARMFUL|RAID_PLAYER_DISPELLABLE" and U(u) and U(u).secretDispel then return { icon = 5 } end
+end
+dev.scripts.OnEvent(dev, "PLAYER_REGEN_DISABLED")
+inCombat = true
+check(slot2.shown and slot2.alpha == 0, "combat : cases vides en place, transparentes")
+units.party1.secretDispel = true
+aurasChanged("party1")
+check(slot2.alpha == 1, "combat : débuff signalé par le filtre du client")
+units.party1.secretDispel = nil
+aurasChanged("party1")
+check(slot2.alpha == 0 and slot2.shown, "combat : débuff retiré, case transparente")
+inCombat = false
+_G.C_Secrets = nil
+dev.scripts.OnEvent(dev, "PLAYER_REGEN_ENABLED")
+check(slot2.shown == false, "fin de combat : cases vides masquées")
+SlashCmdList.FRIENDLYBUFFER("dispel")
+check(slot2.shown, "/fb dispel : mode déplacement, cases montrées")
+SlashCmdList.FRIENDLYBUFFER("dispel")
+check(slot2.shown == false, "/fb dispel : fin du déplacement")
+
+-- Coordination : annonce envoyée au groupe, message reçu enregistré sans erreur
+local sent
+_G.C_ChatInfo = { SendAddonMessage = function(prefix, msg, chan) sent = { prefix, msg, chan } end, RegisterAddonMessagePrefix = noop }
+ns.Coord.Announce()
+now = now + 5
+tick()
+check(sent and sent[1] == "FriendlyBuffer" and sent[2]:match("^H:G0:PRIEST:") and sent[3] == "PARTY", "coordination : annonce au groupe")
+fire("CHAT_MSG_ADDON", "FriendlyBuffer", "H:Player-1-0AB:PRIEST:fortitude", "PARTY", "Autre")
+fire("CHAT_MSG_ADDON", "FriendlyBuffer", "n'importe quoi", "PARTY", "Autre")
+tick()
+check(ns.Coord.Status() == 1, "coordination : pair hors du groupe ignoré")
+
+-- Bouton de la minicarte (LibDBIcon) ; options interdites en combat
+local launcher = LibStub("LibDataBroker-1.1"):GetDataObjectByName("FriendlyBuffer")
+check(launcher and dbIcons.FriendlyBuffer and dbIcons.FriendlyBuffer.db == ns.db.minimapIcon and dbIcons.FriendlyBuffer.shown, "minicarte : bouton déclaré via LibDBIcon, position sauvegardée")
+launcher.OnClick(nil, "LeftButton")
+check(ns.db.hidden == true, "minicarte : clic gauche masque la fenêtre")
+launcher.OnClick(nil, "LeftButton")
+ns.db.minimap = false
+ns.OnSettingsChanged()
+check(ns.db.minimapIcon.hide == true and not dbIcons.FriendlyBuffer.shown, "minicarte : option coupée, bouton masqué")
+ns.db.minimap = true
+ns.OnSettingsChanged()
+inCombat = true
+printed = {}
+launcher.OnClick(nil, "RightButton")
+check(printedMatch("impossible pendant le combat"), "options : refusées en combat")
+inCombat = false
+
+-- Priorités gardées pour les autres personnages
+fire("PLAYER_LOGOUT")
+check(FriendlyBufferDB.chars["Moi - "] and FriendlyBufferDB.chars["Moi - "].class == "PRIEST", "déconnexion : priorités du personnage sauvegardées")
 
 -- Raccourci clavier déclaré sur la première ligne
 check(_G["BINDING_NAME_CLICK FriendlyBufferRow1:LeftButton"] ~= nil and io.open("Bindings.xml"):read("*a"):match('CLICK FriendlyBufferRow1:LeftButton'), "raccourci : clic sur la première ligne")

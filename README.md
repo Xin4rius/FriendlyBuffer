@@ -28,6 +28,8 @@ rank** than the one you can cast on them (their level is taken into account).
 - `/fb reset`: move the window back to the center
 - `/fb toggle <buff>`: turn a buff on / off for everyone (handy in a macro)
 - `/fb ignore <name>`: ignore a player, or stop ignoring them (Shift + right click on their row); no name: list ignored players
+- `/fb dispel`: move the dispel window (same command when done)
+- Minimap button: left click = window, right click = settings, drag = move it
 - Key binding "buff the first player of the list": Options → Keybindings → AddOns
 
 Players outside your group: WoW only exposes them to addons through **friendly nameplates** (or
@@ -64,6 +66,32 @@ the detected spec.
   the bottom for 5 seconds.
 - **Alt + left click**: target the player instead of buffing them.
 
+- **Dead players** (priest, paladin, shaman): dead group members go to the top of the list; a click
+  casts the resurrection. Once cast, the player is not offered again for 60 s while they accept.
+- **Counters** (detailed mode, in a group): "in place / total" for each buff under the list, details
+  when hovering the window. On a ready check, missing buffs are listed in the chat.
+- **Smart group version**: the group version is on the left click only when at least N players (2 by
+  default) of the same raid group, or of the same class for greater blessings, need it; otherwise the
+  single version.
+
+## Coordination
+
+FriendlyBuffer users of the same group announce themselves to each other (addon messages, nothing in
+the chat). Paladins: each one gets one blessing per target class, in priority order (the first takes
+Kings, the second Wisdom, and so on); if a paladin without the addon already cast it, the usual choice
+applies. Priests, mages, druids in a raid: raid groups are split in turn between players of the same
+class. `/fb debug` shows the split.
+
+## Dispel window
+
+Priest, paladin, druid, mage, shaman: a small grid with no background or border (one row per raid
+group) where only the square of a group member carrying a debuff you can remove shows up: debuff
+icon, border in the color of its type, player name. Left click: first dispel spell (priest: magic;
+druid: curse; shaman: poison; paladin: Cleanse), right click: the second one (disease, poison…). In
+combat, empty squares stay in place but invisible (WoW forbids hiding them); as auras are secret in
+combat on this client, detection then relies on the game's "debuffs I can dispel" filter, without the
+type (grey border). `/fb debug` on a target tells whether both readings see it.
+
 ## Settings
 
 - Group / greater buffs (left click: group version, right click: single version)
@@ -75,6 +103,9 @@ the detected spec.
   like WoW names without Shift+V, with fallback fonts for Chinese, Korean and Cyrillic names.
 - Spec detection by inspection, on by default
 - Buff priorities per target class and spec: reorder, enable or disable each buff
+- Copy the priorities of another character of the same class (saved on logout)
+- Resurrection, ready check reminder, coordination, minimap button, group version threshold
+- Dispel window: enabled, names on squares, square size, move
 
 ## Languages
 
