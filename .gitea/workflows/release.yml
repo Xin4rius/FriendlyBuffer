@@ -2,7 +2,7 @@
 # envoi sur CurseForge par le packager BigWigs, puis release Gitea avec le zip.
 # Un tag contenant « beta » ou « alpha » donne une version bêta / alpha sur CurseForge.
 #
-# Gitea, Actions > Secrets   : CF_API_KEY             (curseforge.com > My API Tokens)
+# Gitea, Actions > Secrets   : CF_API_KEY (ou CF_API_TOKEN) (curseforge.com > My API Tokens)
 # Gitea, Actions > Variables : CURSEFORGE_PROJECT_ID  (ID numérique du projet CurseForge)
 name: Release
 
@@ -38,7 +38,7 @@ jobs:
           [ -n "$PROJECT_ID" ] || { echo "::error::Variable CURSEFORGE_PROJECT_ID manquante"; exit 1; }
           curl -s https://raw.githubusercontent.com/BigWigsMods/packager/v2/release.sh | bash -s -- -p "$PROJECT_ID"
         env:
-          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          CF_API_KEY: ${{ secrets.CF_API_KEY || secrets.CF_API_TOKEN }} # CF_API_TOKEN : nom de l'ancienne CI
           PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
 
       # Release Gitea du tag, avec le zip empaqueté (pas l'archive des sources).
