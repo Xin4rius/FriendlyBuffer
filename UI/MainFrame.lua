@@ -246,8 +246,12 @@ local function layout(shown)
     frame:SetHeight(TITLE_HEIGHT + math.max(shown, 1) * ROW_HEIGHT + PADDING + (summary and SUMMARY_HEIGHT or 0))
 end
 
+-- Vrai pendant un combat où la grille de buffs de combat remplace la liste.
+local combatHidden = false
+
 local function shouldShow(total)
-    if ns.db.hidden then return false end
+    if ns.db.hidden or combatHidden then return false end
+    if ns.Preview.Active() and ns.BuffGrid.Active() then return false end -- simulation : comme en combat
     if ns.db.autoHide and total == 0 then return false end
     return true
 end
@@ -344,6 +348,18 @@ function MainFrame.Render(rows, doneRows, counters)
     else
         fullRender(rows, doneRows)
     end
+end
+
+-- PLAYER_REGEN_DISABLED : dernier instant où la fenêtre peut être masquée. La grille de combat
+-- prend le relais si elle est active ; sinon la liste reste, figée, comme avant.
+function MainFrame.EnterCombat()
+    if not frame or not ns.BuffGrid.Active() then return end
+    combatHidden = true
+    frame:Hide()
+end
+
+function MainFrame.LeaveCombat()
+    combatHidden = false
 end
 
 -- Appelé en sortie de combat ou quand le curseur quitte la fenêtre.

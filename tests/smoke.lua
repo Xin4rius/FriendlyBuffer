@@ -17,6 +17,8 @@ function methods:Show() self.shown = true end
 function methods:Hide() self.shown = false end
 function methods:SetShown(v) self.shown = v and true or false end
 function methods:IsShown() return self.shown end
+methods.IsVisible = methods.IsShown
+function methods:GetAlpha() return rawget(self, "alpha") or 1 end
 function methods:SetScript(k, f) self.scripts[k] = f end
 function methods:HookScript(k, f) self.hooks[k] = f end
 function methods:SetAttribute(k, v) self.attrs[k] = v end
@@ -147,8 +149,10 @@ _G.C_NamePlate = {
 }
 _G.C_CVar = { GetCVar = function(k) return cvars[k] end, SetCVar = function(k, v) cvars[k] = tostring(v) end }
 local optionsPanel
+local subPanels = {}
 _G.Settings = {
     RegisterCanvasLayoutCategory = function(panel) optionsPanel = panel; return newObject() end,
+    RegisterCanvasLayoutSubcategory = function(_, panel, title) subPanels[#subPanels + 1] = { panel = panel, title = title } end,
     RegisterAddOnCategory = noop,
     OpenToCategory = noop,
 }
@@ -307,6 +311,11 @@ check(row(1).attrs.macrotext1:match("Sort27681") and row(1).attrs.macrotext2:mat
 
 -- Options : affichage puis tous les boutons/cases cliqués deux fois
 optionsPanel.scripts.OnShow(optionsPanel)
+do
+    local titles = {}
+    for _, sub in ipairs(subPanels) do titles[#titles + 1] = sub.title end
+    check(table.concat(titles, ",") == "Priorités,Combat,Barres de nom", "options : sous-pages priorités, combat, barres de nom")
+end
 for _ = 1, 2 do
     for _, o in ipairs(created) do
         if o.scripts.OnClick and not o.frameName:match("^FriendlyBufferRow") then o.scripts.OnClick(o, "LeftButton") end
@@ -474,6 +483,7 @@ ns.db.contextPresets = false
 -- Résurrection : Garrosh mort -> en tête ; une fois le sort lancé, plus proposé le temps qu'il accepte
 -- Le test des options a tout décoché (GetChecked simulé) : on rétablit les nouvelles options.
 ns.db.resurrect, ns.db.readyCheck, ns.db.dispel, ns.db.coordinate, ns.db.minimap = true, true, true, true, true
+ns.db.buffGrid, ns.db.buffGridNames = true, true
 ns.OnSettingsChanged()
 _G.UnitIsDeadOrGhost = function(u) return U(u) ~= nil and U(u).dead == true end
 units.party1.dead = true
@@ -533,6 +543,107 @@ inCombat = false
 _G.C_Secrets = nil
 dev.scripts.OnEvent(dev, "PLAYER_REGEN_ENABLED")
 check(slot2.shown == false, "fin de combat : cases vides masquées")
+
+-- Combat, auras secrètes : mémoire des buffs lue hors combat, tenue à jour par UNIT_AURA et nos sorts
+local auraFrame
+for _, o in ipairs(created) do if o.events.UNIT_AURA and not o.events.PLAYER_LOGIN and o ~= dev then auraFrame = o end end
+local readBuff = _G.C_UnitAuras.GetBuffDataByIndex
+_G.C_UnitAuras.GetBuffDataByIndex = function(u, i)
+    if inCombat then error("secret") end
+    return readBuff(u, i)
+end
+units.party1.buffs = {}
+units.party2.buffs = { { spellId = 10938, sourceUnit = "player", duration = 1800, expirationTime = now + 1800, auraInstanceID = 501 } }
+tick()
+local function missing(key) return ns.counters[key] and ns.counters[key].missing end
+local before = missing("fortitude")
+units.party1.debuffs = { { name = "Sort", icon = 9, dispelName = "Magic", auraInstanceID = 601 } }
+aurasChanged("party1")
+local garroshRow = rowOf("Garrosh")
+check(garroshRow and garroshRow.row.need.family == "fortitude", "avant combat : Garrosh à buffer (robustesse)")
+local gridEvents
+for _, o in ipairs(created) do if o.events.UNIT_LEVEL and not o.events.PLAYER_LOGIN then gridEvents = o end end
+local grid, garroshCell = _G.FriendlyBufferGridFrame, _G.FriendlyBufferGrid2
+local function iconsShown(tile)
+    local n = 0
+    for _, icon in ipairs(tile.icons) do if icon.alpha == 1 then n = n + 1 end end
+    return n
+end
+check(grid.shown == false, "grille de combat : masquée hors combat")
+check(garroshCell.unit == "party1" and garroshCell.order[1] == "fortitude"
+    and garroshCell.attrs.macrotext1:match("^/cast %[@party1%] Sort") and garroshCell.attrs.type2 == "macro",
+    "grille : une case par joueur, clic gauche = 1er buff prioritaire, clic droit = 2e")
+_G.C_Secrets = { ShouldAurasBeSecret = function() return inCombat end }
+fire("PLAYER_REGEN_DISABLED")
+gridEvents.scripts.OnEvent(gridEvents, "PLAYER_REGEN_DISABLED")
+inCombat = true
+tick()
+check(grid.shown and garroshCell.alpha == 1 and iconsShown(garroshCell) >= 1, "grille : visible en combat, buffs manquants affichés")
+local garroshIcons = iconsShown(garroshCell)
+check(FriendlyBufferFrame.shown == false, "combat : la liste hors combat laisse la place à la grille")
+check(missing("fortitude") == before, "combat : mémoire hors combat reprise telle quelle")
+aurasChanged("party1")
+check(slot2.alpha == 1, "combat : débuff vu hors combat toujours signalé sans le filtre du client")
+auraFrame.scripts.OnEvent(auraFrame, "UNIT_AURA", "party1", { removedAuraInstanceIDs = { 601 } })
+aurasChanged("party1")
+check(slot2.alpha == 0, "combat : débuff retiré (UNIT_AURA), case transparente")
+auraFrame.scripts.OnEvent(auraFrame, "UNIT_AURA", "party2", { removedAuraInstanceIDs = { 501 } })
+tick()
+check(missing("fortitude") == before + 1, "combat : buff retiré (UNIT_AURA) compté manquant")
+garroshRow.scripts.PostClick(garroshRow, "LeftButton")
+fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-2", 10938)
+tick()
+check(garroshRow.done == true and missing("fortitude") == before, "combat : notre buff lancé inscrit, ligne faite")
+check(iconsShown(garroshCell) == garroshIcons - 1, "grille : buff lancé, son icône retirée et les autres resserrées")
+now = now + 1801
+tick()
+check(garroshRow.done == false and garroshRow.row.need.family == "fortitude", "combat : buff inscrit expiré après sa durée, à refaire")
+inCombat = false
+_G.C_Secrets = nil
+_G.C_UnitAuras.GetBuffDataByIndex = readBuff
+units.party1.debuffs = nil
+fire("PLAYER_REGEN_ENABLED")
+dev.scripts.OnEvent(dev, "PLAYER_REGEN_ENABLED")
+gridEvents.scripts.OnEvent(gridEvents, "PLAYER_REGEN_ENABLED")
+check(grid.shown == false, "grille : masquée après le combat")
+check(FriendlyBufferFrame.shown, "fin de combat : la liste revient")
+SlashCmdList.FRIENDLYBUFFER("grid")
+check(grid.shown and garroshCell.alpha == 1 and iconsShown(garroshCell) == #garroshCell.order, "/fb grid : mode déplacement, toutes les cases visibles")
+SlashCmdList.FRIENDLYBUFFER("grid")
+check(grid.shown == false, "/fb grid : fin du déplacement")
+
+-- Simulation (options, /fb test) : faux raid de 12 joueurs, cases sans action ; un vrai combat l'arrête
+check(not ns.Preview.Active(), "simulation : inactive par défaut")
+ns.db.previewCount = 12
+SlashCmdList.FRIENDLYBUFFER("test")
+local fakeBlock = _G.FriendlyBufferGrid12
+check(ns.Preview.Active() and grid.shown and fakeBlock.fake and fakeBlock.fake.name == "Joueur 12", "simulation : grille montrée avec 12 faux joueurs")
+check(fakeBlock.attrs.type1 == nil and _G.FriendlyBufferGrid2.attrs.type1 == nil, "simulation : cases sans sort")
+check(_G.FriendlyBufferDispel12.fake and _G.FriendlyBufferDispel12.attrs.type1 == nil, "simulation : dissipation avec faux joueurs, sans sort")
+tick()
+check(FriendlyBufferFrame.shown == false, "simulation : la liste laisse la place à la grille")
+printed = {}
+gridEvents.scripts.OnEvent(gridEvents, "PLAYER_REGEN_DISABLED")
+dev.scripts.OnEvent(dev, "PLAYER_REGEN_DISABLED")
+fire("PLAYER_REGEN_DISABLED")
+check(not ns.Preview.Active() and printedMatch("simulation arrêtée"), "vrai combat : simulation arrêtée")
+check(_G.FriendlyBufferGrid2.fake == nil and _G.FriendlyBufferGrid2.attrs.macrotext1:match("^/cast %[@party1%]"), "vrai combat : grille revenue aux vrais joueurs")
+check(_G.FriendlyBufferDispel2.fake == nil and _G.FriendlyBufferDispel2.attrs.type1 == "macro", "vrai combat : dissipation revenue aux vrais joueurs")
+gridEvents.scripts.OnEvent(gridEvents, "PLAYER_REGEN_ENABLED")
+dev.scripts.OnEvent(dev, "PLAYER_REGEN_ENABLED")
+fire("PLAYER_REGEN_ENABLED")
+ns.db.previewCount = 5
+
+-- Dissipation : 2 colonnes, 1 ligne -> le 3e joueur n'a pas de case
+ns.db.dispelColumns, ns.db.dispelRows = 2, 1
+ns.OnSettingsChanged()
+check(_G.FriendlyBufferDispel2.unit == "party1" and _G.FriendlyBufferDispel3.unit == nil, "dissipation : colonnes × lignes limitent les cases")
+ns.db.dispelColumns, ns.db.dispelRows = 1, 8
+ns.OnSettingsChanged()
+local p3 = _G.FriendlyBufferDispel3.points[1]
+check(_G.FriendlyBufferDispel3.unit == "party2" and p3[4] == 0 and p3[5] < 0, "dissipation : une colonne, joueurs les uns sous les autres")
+ns.db.dispelColumns, ns.db.dispelRows = 5, 8
+ns.OnSettingsChanged()
 SlashCmdList.FRIENDLYBUFFER("dispel")
 check(slot2.shown, "/fb dispel : mode déplacement, cases montrées")
 SlashCmdList.FRIENDLYBUFFER("dispel")

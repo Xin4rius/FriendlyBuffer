@@ -140,3 +140,30 @@ L["your class has no dispel."] = "你的職業沒有驅散能力。"
 L["Left click: show / hide the window"] = "左鍵：顯示 / 隱藏視窗"
 L["Right click: options"] = "右鍵：選項"
 L["Drag: move this button"] = "拖曳：移動此按鈕"
+
+-- Grille de buffs de combat
+L["Combat buff grid"] = "戰鬥增益網格"
+L["In combat, one square per group member and buff, shown when the buff is missing"] = "戰鬥中每名隊員每個增益一個格子，缺少該增益時顯示"
+L["Buffs: drag, /fb grid when done"] = "增益：拖曳，完成後輸入 /fb grid"
+L["the combat buff grid is off or your class has no buff for others."] = "戰鬥增益網格已關閉，或你的職業沒有給他人的增益。"
+L["/fb grid (move the combat buff grid)"] = "/fb grid（移動戰鬥增益網格）"
+
+-- Simulation
+L["Player %d"] = "玩家 %d"
+L["simulation stopped: combat started."] = "模擬已停止：戰鬥開始。"
+L["/fb test (simulate combat with fake players)"] = "/fb test（用虛擬玩家模擬戰鬥）"
+L["Simulation"] = "模擬"
+L["Simulated players (5: group, more: raid)"] = "模擬玩家數（5：小隊，更多：團隊）"
+L["Stop the simulation"] = "停止模擬"
+L["Simulate combat"] = "模擬戰鬥"
+
+-- Pages des options
+L["Priorities"] = "優先順序"
+L["Combat"] = "戰鬥"
+L["Nameplates"] = "名條"
+
+-- Grille par joueur, colonnes de la dissipation
+L["Shift + left click: %s"] = "Shift + 左鍵：%s"
+L["Shift + right click: %s"] = "Shift + 右鍵：%s"
+L["Columns"] = "欄數"
+L["Rows (at most)"] = "列數（最多）"

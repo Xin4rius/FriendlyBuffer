@@ -140,3 +140,30 @@ L["your class has no dispel."] = "tu clase no tiene disipación."
 L["Left click: show / hide the window"] = "Clic izquierdo: mostrar / ocultar la ventana"
 L["Right click: options"] = "Clic derecho: opciones"
 L["Drag: move this button"] = "Arrastrar: mover este botón"
+
+-- Grille de buffs de combat
+L["Combat buff grid"] = "Cuadrícula de beneficios en combate"
+L["In combat, one square per group member and buff, shown when the buff is missing"] = "En combate, una casilla por miembro del grupo y beneficio, visible cuando falta el beneficio"
+L["Buffs: drag, /fb grid when done"] = "Beneficios: arrastra, /fb grid para terminar"
+L["the combat buff grid is off or your class has no buff for others."] = "la cuadrícula de beneficios en combate está desactivada o tu clase no tiene beneficios para otros."
+L["/fb grid (move the combat buff grid)"] = "/fb grid (mover la cuadrícula de beneficios en combate)"
+
+-- Simulation
+L["Player %d"] = "Jugador %d"
+L["simulation stopped: combat started."] = "simulación detenida: empieza el combate."
+L["/fb test (simulate combat with fake players)"] = "/fb test (simular un combate con jugadores ficticios)"
+L["Simulation"] = "Simulación"
+L["Simulated players (5: group, more: raid)"] = "Jugadores simulados (5: grupo, más: banda)"
+L["Stop the simulation"] = "Detener la simulación"
+L["Simulate combat"] = "Simular un combate"
+
+-- Pages des options
+L["Priorities"] = "Prioridades"
+L["Combat"] = "Combate"
+L["Nameplates"] = "Placas de nombre"
+
+-- Grille par joueur, colonnes de la dissipation
+L["Shift + left click: %s"] = "Mayús + clic izquierdo: %s"
+L["Shift + right click: %s"] = "Mayús + clic derecho: %s"
+L["Columns"] = "Columnas"
+L["Rows (at most)"] = "Filas (como máximo)"

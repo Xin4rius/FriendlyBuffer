@@ -140,3 +140,30 @@ L["your class has no dispel."] = "당신의 직업은 해제 기능이 없습니
 L["Left click: show / hide the window"] = "왼쪽 클릭: 창 표시 / 숨기기"
 L["Right click: options"] = "오른쪽 클릭: 설정"
 L["Drag: move this button"] = "드래그: 이 버튼 이동"
+
+-- Grille de buffs de combat
+L["Combat buff grid"] = "전투 버프 격자"
+L["In combat, one square per group member and buff, shown when the buff is missing"] = "전투 중 파티원과 버프마다 칸 하나, 버프가 없을 때 표시"
+L["Buffs: drag, /fb grid when done"] = "버프: 끌어서 이동, 끝나면 /fb grid"
+L["the combat buff grid is off or your class has no buff for others."] = "전투 버프 격자가 꺼져 있거나 직업에 다른 사람용 버프가 없습니다."
+L["/fb grid (move the combat buff grid)"] = "/fb grid (전투 버프 격자 이동)"
+
+-- Simulation
+L["Player %d"] = "플레이어 %d"
+L["simulation stopped: combat started."] = "시뮬레이션 중지: 전투가 시작되었습니다."
+L["/fb test (simulate combat with fake players)"] = "/fb test (가짜 플레이어로 전투 시뮬레이션)"
+L["Simulation"] = "시뮬레이션"
+L["Simulated players (5: group, more: raid)"] = "시뮬레이션 플레이어 수 (5: 파티, 그 이상: 공격대)"
+L["Stop the simulation"] = "시뮬레이션 중지"
+L["Simulate combat"] = "전투 시뮬레이션"
+
+-- Pages des options
+L["Priorities"] = "우선순위"
+L["Combat"] = "전투"
+L["Nameplates"] = "이름표"
+
+-- Grille par joueur, colonnes de la dissipation
+L["Shift + left click: %s"] = "Shift + 왼쪽 클릭: %s"
+L["Shift + right click: %s"] = "Shift + 오른쪽 클릭: %s"
+L["Columns"] = "열"
+L["Rows (at most)"] = "행 (최대)"

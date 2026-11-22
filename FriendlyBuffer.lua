@@ -85,12 +85,13 @@ local REZ_PENDING = 60
 local REZ_WINDOW = 15     -- délai max entre le clic et la fin du sort
 local rezzedUntil = {}    -- guid -> GetTime() de fin
 local lastRezClick
+local lastBuffClick       -- { row, time } : pour inscrire nos buffs lancés en combat
 
 function ns.NoteClick(row)
     local now = GetTime()
     lastClick = { guid = row.guid, time = now }
     recentClicks[row.guid] = { time = now, row = row }
-    if row.dead then lastRezClick = { guid = row.guid, time = now } end
+    if row.dead then lastRezClick = { guid = row.guid, time = now } else lastBuffClick = { row = row, time = now } end
 end
 
 local function onSpellSucceeded(unit, spellId)
@@ -160,8 +161,10 @@ end
 
 -- Compteurs par buff sur les membres du groupe (joueurs vivants, à portée ou non) :
 -- clé -> { missing, total }. Les bénédictions (une seule par paladin) n'ont qu'un compteur, "*".
+-- Retourne les familles manquantes de la cible (pour la grille de combat).
 local function count(counters, ctx, target)
     local missing, wanted = ns.Decision.Missing(ns.classData, ctx, target)
+    local result = missing
     if ns.classData.mode == "exclusive" then missing, wanted = { ["*"] = next(missing) and true or nil }, { ["*"] = true } end
     for key in pairs(wanted) do
         local c = counters[key] or { missing = 0, total = 0 }
@@ -169,6 +172,7 @@ local function count(counters, ctx, target)
         c.total = c.total + 1
         if missing[key] then c.missing = c.missing + 1 end
     end
+    return result
 end
 
 -- Portée d'une version de groupe : le groupe du raid, ou la classe (bénédictions supérieures).
@@ -178,10 +182,11 @@ local function groupScope(row)
 end
 
 -- stats (optionnel) : compte les joueurs écartés, pour /fb debug.
--- Retourne aussi les GUIDs des joueurs vus qui n'ont besoin de rien, et les compteurs par buff.
+-- Retourne aussi les GUIDs des joueurs vus qui n'ont besoin de rien, les compteurs par buff et,
+-- par GUID des membres du groupe, les familles qui leur manquent (grille de combat).
 local function buildRows(stats)
-    local rows, satisfied, counters = {}, {}, {}
-    if not ns.classData then return rows, satisfied, counters end
+    local rows, satisfied, counters, groupMissing = {}, {}, {}, {}
+    if not ns.classData then return rows, satisfied, counters, groupMissing end
     local db = ns.db
     local now = GetTime()
     local ctx = { isKnown = ns.Compat.IsKnown, settings = db }
@@ -201,14 +206,22 @@ local function buildRows(stats)
                 rows[#rows + 1] = candidate
             end
         elseif (others or isSelf) and not db.ignored[candidate.name] then
+            candidate.auras = ns.Auras.Read(candidate.unit)
+        end
+        -- auras nil : joueur jamais lu hors combat, état inconnu, ni proposé ni compté.
+        if candidate.auras then
             candidate.profile = ns.Specs.ProfileFor(candidate)
-            local target = { level = candidate.level, isGroup = candidate.isGroup, auras = ns.Auras.Read(candidate.unit) }
+            local target = { level = candidate.level, isGroup = candidate.isGroup, auras = candidate.auras }
             ctx.priorities = db.priorities[candidate.profile]
             ctx.assigned = ns.Coord.Assigned(candidate.profile, ctx.priorities)
-            if others and candidate.isGroup and not candidate.isPet then count(counters, ctx, target) end
-            local need
             -- En raid, un autre joueur de ma classe s'occupe de ce groupe.
-            if others and candidate.isGroup and not isSelf and ns.Coord.OtherSubgroup(candidate.subgroup) then
+            local otherPeer = others and candidate.isGroup and not isSelf and ns.Coord.OtherSubgroup(candidate.subgroup)
+            if others and candidate.isGroup and not candidate.isPet then
+                local missing = count(counters, ctx, target)
+                groupMissing[candidate.guid] = not otherPeer and missing or {}
+            end
+            local need
+            if otherPeer then
                 if stats then stats.otherPeer = stats.otherPeer + 1 end
             else
                 need = ns.Decision.Evaluate(ns.classData, ctx, target)
@@ -233,7 +246,7 @@ local function buildRows(stats)
     end
     if db.groupBuffs then ns.Decision.ApplyGroupMin(rows, db.groupMin, groupScope) end
     table.sort(rows, ns.Decision.Compare)
-    return rows, satisfied, counters
+    return rows, satisfied, counters, groupMissing
 end
 
 -- Libellé d'un compteur : nom (ou icône) du buff, déjà posés / total.
@@ -255,6 +268,33 @@ function ns.SortedCounters(counters, onlyMissing)
 end
 
 local dirty, sinceScan, sinceTick = true, 0, 0
+local lastRows = {}
+
+-- Combat : nos buffs n'apparaissent pas sur la cible (auras secrètes), on les inscrit nous-mêmes.
+local CAST_WINDOW = 2     -- délai max entre le clic et la réussite du sort
+local function noteBuffCast(spellId)
+    local click = lastBuffClick
+    if not click or not ns.classData or not ns.Compat.AurasSecret() or GetTime() - click.time > CAST_WINDOW then return end
+    local row = click.row
+    local fam = ns.classData.families[row.need.family] or ns.classData.personal.families[row.need.family]
+    local secret = ns.Compat.IsSecret(spellId)
+    local info = not secret and ns.SpellIndex[spellId]
+    -- Sort secret : on suppose la version individuelle du buff cliqué ; sinon il doit en faire partie.
+    if not fam or (not secret and not (info and info.family == row.need.family)) then return end
+    lastBuffClick = nil
+    local isGroup = info and info.group
+    local duration = isGroup and (fam.groupDuration or fam.duration) or fam.duration
+    spellId = secret and row.need.single.id or spellId
+    ns.Auras.NoteCast(row.guid, spellId, duration)
+    if isGroup then
+        for _, other in ipairs(lastRows) do
+            if other.guid ~= row.guid and other.need.family == row.need.family and groupScope(other) == groupScope(row) then
+                ns.Auras.NoteCast(other.guid, spellId, duration)
+            end
+        end
+    end
+    ns.RequestScan()
+end
 
 local function currentContext()
     if IsInRaid() then return "raid" end
@@ -264,13 +304,14 @@ end
 
 local function scan()
     dirty, sinceScan, sinceTick = false, 0, 0
-    if ns.Compat.AurasSecret() then return end -- affichage figé jusqu'à ce qu'elles redeviennent lisibles
     if ns.classData and ns.db.contextPresets and ns.Config.SwitchContext(ns.db, ns.classData, currentContext()) then
         say(string.format(L["priorities in use: %s."], ns.Config.CONTEXTS[ns.db.context]))
         ns.Options.Refresh()
     end
-    local rows, satisfied, counters = buildRows()
-    ns.counters = counters
+    local rows, satisfied, counters, groupMissing = buildRows()
+    lastRows = rows
+    ns.counters, ns.groupMissing = counters, groupMissing
+    ns.BuffGrid.Update()
     ns.MainFrame.Render(rows, doneRows(rows, satisfied, GetTime()), counters)
     if ns.db.hiddenPlates then ns.Nameplates.Refresh() end
     ns.Specs.Update()
@@ -281,6 +322,7 @@ function ns.RequestScan() dirty = true end
 function ns.OnSettingsChanged()
     ns.Nameplates.Apply()
     ns.Dispel.Refresh()
+    ns.BuffGrid.Refresh()
     ns.Minimap.Refresh()
     scan()
 end
@@ -354,11 +396,22 @@ local function debugScan()
 end
 
 local function debugTarget()
+    local unit = UnitExists("target") and "target" or "player"
+    -- Diagnostic de dissipation avant le reste : il fonctionne aussi en combat (filtre du client).
+    if ns.Dispels[ns.playerClass] then
+        local readable, combat = ns.Dispel.Diagnose(unit)
+        local name = UnitName(unit)
+        if not name or ns.Compat.IsSecret(name) then name = "?" end
+        say(string.format(L["dispel on %s: debuff to remove %s; combat filter: %s"], name,
+            readable and L["yes"] or L["no"], combat == nil and L["unavailable"] or (combat and L["yes"] or L["no"])))
+        print("  " .. ns.Dispel.Dump(unit))
+        for _, line in ipairs(ns.Dispel.Probe(unit)) do print("  " .. line) end
+        for _, line in ipairs(ns.Dispel.ProbeIds(unit)) do print("  " .. line) end
+    end
     if ns.Compat.AurasSecret() then
         say(L["not possible during combat."])
         return
     end
-    local unit = UnitExists("target") and "target" or "player"
     local _, class = UnitClass(unit)
     say(string.format(L["analysis of %s (%s, level %s)"], UnitName(unit) or "?", tostring(class), tostring(UnitLevel(unit))))
     for _, raw in ipairs(ns.Compat.GetBuffs(unit)) do
@@ -366,11 +419,6 @@ local function debugTarget()
         print(string.format("  %s [%s] source=%s duration=%s expiration=%s %s", tostring(raw.name), tostring(raw.spellId),
             tostring(raw.sourceUnit), tostring(raw.duration), tostring(raw.expirationTime),
             info and ("-> " .. info.family .. " power " .. info.power) or ""))
-    end
-    if ns.Dispels[ns.playerClass] then
-        local readable, combat = ns.Dispel.Diagnose(unit)
-        say(string.format(L["dispel on %s: debuff to remove %s; combat filter: %s"], UnitName(unit) or "?",
-            readable and L["yes"] or L["no"], combat == nil and L["unavailable"] or (combat and L["yes"] or L["no"])))
     end
     if not ns.classData then
         say(L["your class has no supported buff."])
@@ -486,10 +534,16 @@ SlashCmdList.FRIENDLYBUFFER = function(input)
         toggleIgnore(arg)
     elseif cmd == "dispel" or cmd == "dissipation" then
         ns.Dispel.ToggleMove()
+    elseif cmd == "grid" or cmd == "grille" then
+        ns.BuffGrid.ToggleMove()
+    elseif cmd == "test" then
+        ns.Preview.Toggle()
     else
         say(L["/fb (show/hide), /fb options, /fb debug (analyze your target), /fb plates (friendly nameplates), /fb reset (position)"])
         say(L["/fb toggle <buff> (on/off for everyone), /fb ignore <name> (ignore or stop ignoring a player; no name: list)"])
         say(L["/fb dispel (move the dispel window)"])
+        say(L["/fb grid (move the combat buff grid)"])
+        say(L["/fb test (simulate combat with fake players)"])
     end
 end
 
@@ -528,6 +582,7 @@ local function onLogin()
     ns.Specs.Init(ns.db)
 
     indexSpellNames()
+    ns.Auras.Init()
     ns.MainFrame.Create()
     ns.Dispel.Create()
     ns.Options.Create()
@@ -541,6 +596,7 @@ local function onLogin()
     ns.Nameplates.Apply()
     warnNameplates()
     ns.Minimap.Create()
+    ns.BuffGrid.Create()
     ns.Coord.Init()
     ns.Coord.Announce()
 
@@ -563,7 +619,11 @@ events:SetScript("OnEvent", function(_, event, unit, arg2, ...)
     elseif event == "PLAYER_ENTERING_WORLD" then
         ns.Nameplates.Apply() -- entrée / sortie d'instance
         ns.RequestScan()
+    elseif event == "PLAYER_REGEN_DISABLED" then
+        ns.MainFrame.EnterCombat()
+        ns.RequestScan()
     elseif event == "PLAYER_REGEN_ENABLED" then
+        ns.MainFrame.LeaveCombat()
         ns.Nameplates.Apply()
         scan()
         ns.MainFrame.Flush()
@@ -576,6 +636,7 @@ events:SetScript("OnEvent", function(_, event, unit, arg2, ...)
         onReadyCheck()
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
         onSpellSucceeded(unit, (...)) -- unité, castGUID, spellId
+        if unit == "player" then noteBuffCast((...)) end
     elseif event == "CHAT_MSG_ADDON" then
         ns.Coord.OnMessage(unit, arg2)
     elseif event == "UI_ERROR_MESSAGE" then

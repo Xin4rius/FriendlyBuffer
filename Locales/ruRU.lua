@@ -140,3 +140,30 @@ L["your class has no dispel."] = "у вашего класса нет рассе
 L["Left click: show / hide the window"] = "Левый клик: показать / скрыть окно"
 L["Right click: options"] = "Правый клик: настройки"
 L["Drag: move this button"] = "Перетаскивание: переместить эту кнопку"
+
+-- Grille de buffs de combat
+L["Combat buff grid"] = "Сетка баффов в бою"
+L["In combat, one square per group member and buff, shown when the buff is missing"] = "В бою по ячейке на каждого участника группы и бафф, видна, когда баффа нет"
+L["Buffs: drag, /fb grid when done"] = "Баффы: перетащите, затем /fb grid"
+L["the combat buff grid is off or your class has no buff for others."] = "сетка баффов в бою выключена или у вашего класса нет баффов для других."
+L["/fb grid (move the combat buff grid)"] = "/fb grid (переместить сетку баффов в бою)"
+
+-- Simulation
+L["Player %d"] = "Игрок %d"
+L["simulation stopped: combat started."] = "симуляция остановлена: начался бой."
+L["/fb test (simulate combat with fake players)"] = "/fb test (симулировать бой с ненастоящими игроками)"
+L["Simulation"] = "Симуляция"
+L["Simulated players (5: group, more: raid)"] = "Симулируемые игроки (5: группа, больше: рейд)"
+L["Stop the simulation"] = "Остановить симуляцию"
+L["Simulate combat"] = "Симулировать бой"
+
+-- Pages des options
+L["Priorities"] = "Приоритеты"
+L["Combat"] = "Бой"
+L["Nameplates"] = "Индикаторы здоровья"
+
+-- Grille par joueur, colonnes de la dissipation
+L["Shift + left click: %s"] = "Shift + левый клик: %s"
+L["Shift + right click: %s"] = "Shift + правый клик: %s"
+L["Columns"] = "Столбцы"
+L["Rows (at most)"] = "Строки (не более)"

@@ -1,5 +1,37 @@
 # FriendlyBuffer
 
+## v1.4.0
+
+### English
+
+- **Works in combat**: auras are secret in combat on this client. The addon now keeps each player's
+  last out-of-combat reading and updates it in combat (buffs and debuffs removed or expired, buffs cast
+  from the addon, auras the client still lets addons read).
+- **Combat buff grid**: in combat, the list gives way to a grid prepared out of combat, one square per
+  group member with the icons of the buffs they miss. Left click: 1st buff of their priorities, right
+  click: 2nd, Shift + left / right click: 3rd / 4th. Invisible while nothing is missing. `/fb grid`
+  or the Move button to move it.
+- **Dispel window**: number of columns and maximum number of rows; debuffs seen out of combat stay
+  shown in combat until they are removed.
+- **Simulation**: the settings (or `/fb test`) show the combat grid and the dispel window with 1 to 40
+  fake players, to set them up out of combat.
+- **Settings split into pages**: general, priorities, combat, nameplates.
+
+### Français
+
+- **Fonctionne en combat** : les auras sont secrètes en combat sur ce client. L'addon garde la dernière
+  lecture hors combat de chaque joueur et la tient à jour en combat (buffs et débuffs retirés ou
+  expirés, buffs lancés depuis l'addon, auras que le client laisse encore lire).
+- **Grille de buffs de combat** : en combat, la liste laisse la place à une grille préparée hors combat,
+  une case par membre du groupe avec les icônes des buffs qui lui manquent. Clic gauche : 1er buff de
+  ses priorités, clic droit : 2e, Maj + clic gauche / droit : 3e / 4e. Invisible tant que rien ne
+  manque. `/fb grid` ou le bouton Déplacer pour la déplacer.
+- **Fenêtre de dissipation** : nombre de colonnes et nombre de lignes maximum ; les débuffs vus hors
+  combat restent affichés en combat jusqu'à leur retrait.
+- **Simulation** : les options (ou `/fb test`) affichent la grille de combat et la fenêtre de
+  dissipation avec 1 à 40 faux joueurs, pour les régler hors combat.
+- **Options réparties en pages** : général, priorités, combat, barres de nom.
+
 ## v1.3.0
 
 ### English

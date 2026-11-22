@@ -29,6 +29,8 @@ inférieur** à ce que vous pouvez lui poser (en tenant compte de son niveau).
 - `/fb toggle <buff>` : active / coupe un buff pour tout le monde (pratique en macro)
 - `/fb ignore <nom>` : ignore un joueur, ou cesse de l'ignorer (Maj + clic droit sur sa ligne) ; sans nom, liste les ignorés
 - `/fb dispel` : déplacer la fenêtre de dissipation (même commande pour finir)
+- `/fb grid` : déplacer la grille de buffs de combat (même commande pour finir)
+- `/fb test` : simuler un combat avec de faux joueurs (même commande pour arrêter)
 - Bouton de la minicarte : clic gauche = fenêtre, clic droit = options, glisser = le déplacer
 - Raccourci clavier « buffer le premier joueur de la liste » : Options → Raccourcis → AddOns
 
@@ -47,7 +49,9 @@ au même endroit. Tant que le curseur est sur la fenêtre, les nouveaux joueurs 
 jamais au-dessus.
 
 En combat, la liste est figée (WoW interdit aux addons de modifier les boutons de sort en combat)
-mais reste cliquable ; elle est reconstruite à la sortie du combat.
+mais reste cliquable ; elle est reconstruite à la sortie du combat. Les auras étant secrètes en combat
+sur ce client, l'addon part de la dernière lecture hors combat de chaque joueur et la tient à jour :
+buffs retirés ou expirés, et buffs lancés depuis la liste.
 
 ## Spécialisations
 
@@ -92,8 +96,23 @@ icône du débuff, bordure de la couleur de son type, nom du joueur. Clic gauche
 dissipation (prêtre : magie ; druide : malédiction ; chaman : poison ; paladin : Épuration), clic droit :
 le second (maladie, poison…). En combat, les cases vides restent en place mais invisibles (WoW
 interdit de les masquer) ; les auras étant secrètes en combat sur ce client, la détection s'appuie alors
-sur le filtre « débuffs que je peux dissiper » du jeu, sans connaître le type (bordure grise).
+sur les débuffs vus hors combat et encore présents, ceux ajoutés en combat quand le client les laisse lire,
+et le filtre « débuffs que je peux dissiper » du jeu (type inconnu : bordure grise).
 `/fb debug` sur une cible indique si les deux lectures la voient.
+
+**Grille de buffs de combat** : la liste ne pouvant pas gagner de boutons en combat, une grille est
+préparée hors combat avec une case par membre du groupe : son nom et, côte à côte, les icônes des buffs
+qui lui manquent. Les clics suivent les priorités de ce joueur : clic gauche 1er buff, clic droit 2e,
+Maj + clic gauche 3e, Maj + clic droit 4e (bulle d'aide sur la case). Elle n'apparaît qu'en combat, à la
+place de la liste ; une case reste invisible tant que rien ne manque (atténuée hors de portée). Les cases
+invisibles restent en place et captent la souris : WoW interdit de les masquer en combat. Réglages :
+activation, noms, taille des icônes et bouton Déplacer (ou `/fb grid`). La fenêtre de dissipation a aussi
+un nombre de colonnes et un nombre de lignes maximum.
+
+**Simulation** : les options (ou `/fb test`) peuvent afficher hors combat la grille de buffs de combat
+et la fenêtre de dissipation comme en combat, avec 1 à 40 faux joueurs (plus de 5 : disposition de raid)
+à qui il manque des buffs et qui portent des débuffs à retirer. L'état change toutes les quelques
+secondes ; les cases simulées ne lancent rien, et un vrai combat arrête la simulation.
 
 ## Options
 
@@ -110,7 +129,7 @@ sur le filtre « débuffs que je peux dissiper » du jeu, sans connaître le typ
 - Priorités des buffs par classe et spé de cible : réordonner, activer ou désactiver chaque buff
 - Copier les priorités d'un autre personnage de la même classe (sauvegardées à la déconnexion)
 - Résurrection, rappel au ready check, coordination, bouton de la minicarte, seuil de la version de groupe
-- Fenêtre de dissipation : activée, noms sur les cases, taille des cases, déplacer
+- Fenêtre de dissipation : activée, noms sur les cases, taille des cases, colonnes, lignes, déplacer
 
 ## Langues
 

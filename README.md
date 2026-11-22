@@ -29,6 +29,8 @@ rank** than the one you can cast on them (their level is taken into account).
 - `/fb toggle <buff>`: turn a buff on / off for everyone (handy in a macro)
 - `/fb ignore <name>`: ignore a player, or stop ignoring them (Shift + right click on their row); no name: list ignored players
 - `/fb dispel`: move the dispel window (same command when done)
+- `/fb grid`: move the combat buff grid (same command when done)
+- `/fb test`: simulate combat with fake players (same command to stop)
 - Minimap button: left click = window, right click = settings, drag = move it
 - Key binding "buff the first player of the list": Options → Keybindings → AddOns
 
@@ -46,7 +48,9 @@ clicking the same spot. While your cursor is over the window, new players are on
 bottom, never above.
 
 In combat the list is frozen (WoW does not let addons change spell buttons in combat) but stays
-clickable; it is rebuilt when combat ends.
+clickable; it is rebuilt when combat ends. As auras are secret in combat on this client, the addon
+starts from each player's last out-of-combat reading and keeps it up to date: buffs removed or
+expired, and buffs cast from the list.
 
 ## Specializations
 
@@ -89,8 +93,22 @@ group) where only the square of a group member carrying a debuff you can remove 
 icon, border in the color of its type, player name. Left click: first dispel spell (priest: magic;
 druid: curse; shaman: poison; paladin: Cleanse), right click: the second one (disease, poison…). In
 combat, empty squares stay in place but invisible (WoW forbids hiding them); as auras are secret in
-combat on this client, detection then relies on the game's "debuffs I can dispel" filter, without the
-type (grey border). `/fb debug` on a target tells whether both readings see it.
+combat on this client, detection then relies on debuffs seen out of combat and still present, those
+added in combat when the client lets them be read, and the game's "debuffs I can dispel" filter
+(unknown type: grey border). `/fb debug` on a target tells whether both readings see it.
+
+**Combat buff grid**: as the list cannot gain new buttons in combat, a grid is prepared out of combat
+with one square per group member, showing the player name and, side by side, the icons of the buffs they
+miss. Clicks follow that player's priorities: left click 1st buff, right click 2nd, Shift + left click
+3rd, Shift + right click 4th (tooltip on the square). It only appears in combat, in place of the list;
+a square stays invisible while nothing is missing (dimmed out of range). Invisible squares stay in place
+and still catch the mouse: WoW forbids hiding them in combat. Settings: on/off, names, icon size and
+Move button (or `/fb grid`). The dispel window also has a number of columns and a maximum number of rows.
+
+**Simulation**: the settings (or `/fb test`) can show the combat buff grid and the dispel window as in
+combat, out of combat, with 1 to 40 fake players (more than 5: raid layout) missing buffs and carrying
+debuffs you can remove. The state changes every few seconds; simulated squares cast nothing, and a real
+combat stops the simulation.
 
 ## Settings
 
@@ -105,7 +123,7 @@ type (grey border). `/fb debug` on a target tells whether both readings see it.
 - Buff priorities per target class and spec: reorder, enable or disable each buff
 - Copy the priorities of another character of the same class (saved on logout)
 - Resurrection, ready check reminder, coordination, minimap button, group version threshold
-- Dispel window: enabled, names on squares, square size, move
+- Dispel window: enabled, names on squares, square size, columns, rows, move
 
 ## Languages
 

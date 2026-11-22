@@ -58,7 +58,9 @@ local function isCandidate(unit, isGroup, isPet, includeDead)
     if not isGroup then
         if UnitInParty(unit) or UnitInRaid(unit) or UnitIsUnit(unit, "player") then return false, nil end
         -- Ne pas se faire marquer JcJ en buffant un inconnu marqué.
-        if UnitIsPVP(unit) and not UnitIsPVP("player") then return false, L["PvP"] end
+        -- En instance, l'état JcJ d'un inconnu peut être secret : invérifiable, donc rejeté.
+        local pvp = UnitIsPVP(unit)
+        if ns.Compat.IsSecret(pvp) or (pvp and not UnitIsPVP("player")) then return false, L["PvP"] end
     end
     return true
 end
@@ -116,6 +118,26 @@ function Scanner.Collect(includeStrangers, includePets, includeDead)
 end
 
 Scanner.GroupUnits = groupUnits
+
+-- Membres du groupe et leur place dans une grille de `columns` colonnes : { {unit, position}, ... } ;
+-- en raid, position = (groupe - 1) * columns + rang dans le groupe (une ligne par groupe).
+function Scanner.GroupLayout(columns)
+    local list = {}
+    if IsInRaid() then
+        local filled = {}
+        for i = 1, GetNumGroupMembers() do
+            local subgroup = subgroupOf("raid" .. i)
+            filled[subgroup] = (filled[subgroup] or 0) + 1
+            list[#list + 1] = { unit = "raid" .. i, position = (subgroup - 1) * columns + filled[subgroup] }
+        end
+    else
+        list[1] = { unit = "player", position = 1 }
+        if IsInGroup() then
+            for i = 1, GetNumSubgroupMembers() do list[#list + 1] = { unit = "party" .. i, position = i + 1 } end
+        end
+    end
+    return list
+end
 
 -- Unité qui désigne actuellement ce GUID (les numéros de barres de nom changent), ou nil.
 function Scanner.FindUnit(guid)

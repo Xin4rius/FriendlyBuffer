@@ -539,7 +539,7 @@ test("CopyFrom : priorités copiées (pas partagées) et remises en accord avec 
 end)
 
 local SOURCES = { "FriendlyBuffer.lua", "Core/Config.lua", "Core/Scanner.lua", "Core/Specs.lua", "UI/MainFrame.lua", "UI/Options.lua", "UI/Nameplates.lua",
-    "Core/Coord.lua", "UI/Dispel.lua", "UI/Minimap.lua" }
+    "Core/Coord.lua", "UI/Dispel.lua", "UI/BuffGrid.lua", "UI/Preview.lua", "UI/Minimap.lua" }
 local LOCALES = { frFR = "frFR", deDE = "deDE", esES = "esES", esMX = "esES", itIT = "itIT", ptBR = "ptBR",
     ruRU = "ruRU", koKR = "koKR", zhCN = "zhCN", zhTW = "zhTW" }
 

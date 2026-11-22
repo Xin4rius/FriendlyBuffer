@@ -14,7 +14,7 @@ function Compat.GetBuffs(unit)
             if not data then break end
             list[#list + 1] = {
                 spellId = data.spellId, name = data.name, sourceUnit = data.sourceUnit,
-                duration = data.duration, expirationTime = data.expirationTime,
+                duration = data.duration, expirationTime = data.expirationTime, id = data.auraInstanceID,
             }
         end
     else
@@ -37,7 +37,10 @@ function Compat.GetDebuffs(unit)
         for i = 1, MAX_BUFFS do
             local data = C_UnitAuras.GetDebuffDataByIndex(unit, i)
             if not data then break end
-            list[#list + 1] = { name = data.name, icon = data.icon, dispelName = data.dispelName }
+            list[#list + 1] = {
+                name = data.name, icon = data.icon, dispelName = data.dispelName,
+                expirationTime = data.expirationTime, id = data.auraInstanceID,
+            }
         end
     elseif UnitDebuff then
         for i = 1, MAX_BUFFS do
@@ -61,6 +64,36 @@ function Compat.DispellableSecret(unit)
     local dtype = data.dispelName
     if Compat.IsSecret(dtype) then dtype = nil end
     return true, data.icon, dtype
+end
+
+-- API par identifiant d'aura (combat) : chacune retourne nil quand le client la refuse ou la rend secrète.
+
+-- Identifiants des auras de l'unité qui passent `filter`.
+function Compat.AuraIds(unit, filter)
+    if not (C_UnitAuras and C_UnitAuras.GetUnitAuraInstanceIDs) then return nil end
+    local ok, ids = pcall(C_UnitAuras.GetUnitAuraInstanceIDs, unit, filter)
+    if not ok or Compat.IsSecret(ids) or type(ids) ~= "table" then return nil end
+    for _, id in ipairs(ids) do
+        if Compat.IsSecret(id) then return nil end
+    end
+    return ids
+end
+
+-- Données (champs éventuellement secrets) d'une aura par identifiant : false si elle a disparu.
+function Compat.AuraById(unit, id)
+    if not (C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID) then return nil end
+    local ok, data = pcall(C_UnitAuras.GetAuraDataByAuraInstanceID, unit, id)
+    if not ok then return nil end
+    if Compat.IsSecret(data) then return true end -- présente, mais illisible
+    return data or false
+end
+
+-- true si l'aura passe `filter` (par ex. débuff que je peux retirer).
+function Compat.AuraPasses(unit, id, filter)
+    if not (C_UnitAuras and C_UnitAuras.IsAuraFilteredOutByInstanceID) then return nil end
+    local ok, out = pcall(C_UnitAuras.IsAuraFilteredOutByInstanceID, unit, id, filter)
+    if not ok or Compat.IsSecret(out) or out == nil then return nil end
+    return not out
 end
 
 -- Retourne nom, icône ou nil si le sort n'existe pas sur ce client.
@@ -221,6 +254,16 @@ function Compat.RegisterOptions(panel, title)
     panel.name = title
     InterfaceOptions_AddCategory(panel)
     return panel
+end
+
+-- Sous-page sous la page principale (`parent` : objet rendu par RegisterOptions).
+function Compat.RegisterSubOptions(parent, panel, title, parentTitle)
+    if Settings and Settings.RegisterCanvasLayoutSubcategory then
+        Settings.RegisterCanvasLayoutSubcategory(parent, panel, title)
+        return
+    end
+    panel.name, panel.parent = title, parentTitle
+    InterfaceOptions_AddCategory(panel)
 end
 
 function Compat.OpenOptions(handle)

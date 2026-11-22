@@ -9,7 +9,7 @@ ns.Options = Options
 local DISPLAY_LABELS = { minimal = L["Minimal"], info = L["Detailed"] }
 local MAX_ENTRIES = 6
 
-local panel, handle
+local handle
 local refreshers = {}
 local selectedProfile = 1
 
@@ -263,90 +263,140 @@ local function buildCopy(parent, y)
     return y - 32
 end
 
-local CONTENT_WIDTH, CONTENT_HEIGHT = 640, 1380
+local CONTENT_WIDTH = 640
+local pages = {}
 
-function Options.Create()
-    panel = CreateFrame("Frame")
-    panel:Hide()
+local function refreshAll()
+    for _, refresh in ipairs(refreshers) do refresh() end
+end
 
-    -- Contenu défilant : le panneau est plus haut que la fenêtre d'options.
+-- Page d'options défilante (au cas où son contenu dépasse la fenêtre), avec son titre.
+local function newPage(title, height)
+    local page = CreateFrame("Frame")
+    page:Hide()
     -- ScrollFrameTemplate : modèle moderne présent sur Forever (utilisé aussi par Leatrix Plus).
-    local scroll = CreateFrame("ScrollFrame", nil, panel, "ScrollFrameTemplate")
+    local scroll = CreateFrame("ScrollFrame", nil, page, "ScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", 0, -4)
     scroll:SetPoint("BOTTOMRIGHT", -28, 4)
     local content = CreateFrame("Frame", nil, scroll)
-    content:SetSize(CONTENT_WIDTH, CONTENT_HEIGHT)
+    content:SetSize(CONTENT_WIDTH, height)
     scroll:SetScrollChild(content)
+    label(content, title, "GameFontNormalLarge"):SetPoint("TOPLEFT", 16, -16)
+    page:SetScript("OnShow", refreshAll)
+    pages[#pages + 1] = page
+    return page, content
+end
 
-    local title = label(content, "FriendlyBuffer", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 16, -16)
+-- Page principale : la liste et le fonctionnement général.
+local function buildGeneral(content)
     local sub = label(content, L["Lists nearby players to buff; click a name to cast the buff (Alt + click: select)."], "GameFontHighlightSmall")
-    sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
+    sub:SetPoint("TOPLEFT", 16, -40)
 
     checkbox(content, L["Use group / greater buffs (left click, group members)"], "groupBuffs", 16, -60)
-    checkbox(content, L["Include players outside your group (friendly nameplates, target)"], "includeStrangers", 16, -86)
-    local plates = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
-    plates:SetPoint("TOPLEFT", 40, -112)
-    label(content, L["Show friendly nameplates (required to detect strangers)"]):SetPoint("LEFT", plates, "RIGHT", 2, 1)
-    plates:SetScript("OnClick", function() ns.ToggleNameplates(); changed() end)
-    refreshers[#refreshers + 1] = function() plates:SetChecked(ns.Compat.FriendlyNameplatesShown()) end
-
-    checkbox(content, L["Discreet friendly nameplates (only the name is shown, click-through)"], "hiddenPlates", 40, -138)
-    checkbox(content, L["Hide the window when nobody needs a buff"], "autoHide", 16, -164)
-    checkbox(content, L["Lock the window position"], "locked", 16, -190)
-    checkbox(content, L["Include the pets of group members"], "includePets", 16, -216)
+    checkbox(content, L["Hide the window when nobody needs a buff"], "autoHide", 16, -86)
+    checkbox(content, L["Lock the window position"], "locked", 16, -112)
+    checkbox(content, L["Include the pets of group members"], "includePets", 16, -138)
 
     local modes = {}
     for _, mode in ipairs(ns.Config.DISPLAY_MODES) do modes[#modes + 1] = { key = mode, label = DISPLAY_LABELS[mode] } end
-    choice(content, L["Display mode"], "displayMode", modes, 20, -252)
+    choice(content, L["Display mode"], "displayMode", modes, 20, -174)
 
-    stepper(content, L["Maximum number of rows"], "maxRows", 20, -282, 1, 1, 20, "%d")
-    stepper(content, L["Expiring soon (5/10 min buffs)"], "thresholdShort", 20, -308, 15, 15, 300, "%d s")
-    stepper(content, L["Expiring soon (30/60 min buffs)"], "thresholdLong", 20, -334, 30, 30, 900, "%d s")
-    stepper(content, L["Keep buffed players shown as OK for"], "doneDuration", 20, -360, 1, 0, 30, "%d s")
-    stepper(content, L["Warn when group buff reagents drop to (0: never)"], "reagentWarn", 20, -386, 1, 0, 20, "%d")
-    stepper(content, L["Group version from this many players to buff (same group / class)"], "groupMin", 20, -412, 1, 1, 10, "%d")
-    checkbox(content, L["Remind missing buffs on a ready check"], "readyCheck", 16, -434)
-    checkbox(content, L["Share the work with other FriendlyBuffer users of the group"], "coordinate", 16, -460)
-    checkbox(content, L["Minimap button"], "minimap", 16, -486)
-    local y = -512
+    stepper(content, L["Maximum number of rows"], "maxRows", 20, -204, 1, 1, 20, "%d")
+    stepper(content, L["Expiring soon (5/10 min buffs)"], "thresholdShort", 20, -230, 15, 15, 300, "%d s")
+    stepper(content, L["Expiring soon (30/60 min buffs)"], "thresholdLong", 20, -256, 30, 30, 900, "%d s")
+    stepper(content, L["Keep buffed players shown as OK for"], "doneDuration", 20, -282, 1, 0, 30, "%d s")
+    stepper(content, L["Warn when group buff reagents drop to (0: never)"], "reagentWarn", 20, -308, 1, 0, 20, "%d")
+    stepper(content, L["Group version from this many players to buff (same group / class)"], "groupMin", 20, -334, 1, 1, 10, "%d")
+    checkbox(content, L["Remind missing buffs on a ready check"], "readyCheck", 16, -356)
+    checkbox(content, L["Share the work with other FriendlyBuffer users of the group"], "coordinate", 16, -382)
+    checkbox(content, L["Minimap button"], "minimap", 16, -408)
     if ns.Resurrection[ns.playerClass] then
-        checkbox(content, L["List dead group members to resurrect"], "resurrect", 16, y)
-        y = y - 26
+        checkbox(content, L["List dead group members to resurrect"], "resurrect", 16, -434)
     end
-    y = buildCopy(content, y - 6)
+end
 
-    if ns.Dispels[ns.playerClass] then
-        local dispelHeader = label(content, L["Dispel window"], "GameFontNormalLarge")
-        dispelHeader:SetPoint("TOPLEFT", 16, y - 14)
-        checkbox(content, L["Show the group members carrying a debuff you can remove"], "dispel", 16, y - 38)
-        checkbox(content, L["Names on the squares"], "dispelNames", 16, y - 64)
-        stepper(content, L["Square size"], "dispelSize", 20, y - 94, 2, 16, 48, "%d")
-        local move = smallButton(content, L["Move"], 120, function() ns.Dispel.ToggleMove() end)
-        move:SetPoint("TOPLEFT", 20, y - 120)
-        y = y - 150
-    end
+-- Inconnus hors du groupe : barres de nom alliées et aspect des barres discrètes.
+local function buildNameplates(content)
+    checkbox(content, L["Include players outside your group (friendly nameplates, target)"], "includeStrangers", 16, -44)
+    local plates = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
+    plates:SetPoint("TOPLEFT", 40, -70)
+    label(content, L["Show friendly nameplates (required to detect strangers)"]):SetPoint("LEFT", plates, "RIGHT", 2, 1)
+    plates:SetScript("OnClick", function() ns.ToggleNameplates(); changed() end)
+    refreshers[#refreshers + 1] = function() plates:SetChecked(ns.Compat.FriendlyNameplatesShown()) end
+    checkbox(content, L["Discreet friendly nameplates (only the name is shown, click-through)"], "hiddenPlates", 40, -96)
 
-    local namesHeader = label(content, L["Names on discreet nameplates"], "GameFontNormalLarge")
-    namesHeader:SetPoint("TOPLEFT", 16, y - 14)
+    local y = -122
+    label(content, L["Names on discreet nameplates"], "GameFontNormal"):SetPoint("TOPLEFT", 16, y - 14)
     choice(content, L["Font"], "plateFont", ns.Config.PLATE_FONTS, 20, y - 44)
     choice(content, L["Outline"], "plateOutline", ns.Config.PLATE_OUTLINES, 20, y - 74)
     stepper(content, L["Size"], "plateFontSize", 20, y - 102, 1, 8, 48, "%d")
     checkbox(content, L["Shadow"], "plateShadow", 16, y - 124)
     checkbox(content, L["Show the guild under the name"], "plateGuild", 16, y - 150)
-
-    buildPersonal(content, buildPriorities(content, y - 196))
-
-    panel:SetScript("OnShow", function()
-        for _, refresh in ipairs(refreshers) do refresh() end
-    end)
-    handle = ns.Compat.RegisterOptions(panel, "FriendlyBuffer")
 end
 
--- Réglage changé ailleurs (commande, changement de contexte) : met à jour le panneau s'il est ouvert.
+-- Fenêtres de combat : dissipation, grille de buffs, simulation.
+local function buildCombat(content)
+    local y = -30
+    if ns.Dispels[ns.playerClass] then
+        label(content, L["Dispel window"], "GameFontNormal"):SetPoint("TOPLEFT", 16, y - 14)
+        checkbox(content, L["Show the group members carrying a debuff you can remove"], "dispel", 16, y - 38)
+        checkbox(content, L["Names on the squares"], "dispelNames", 16, y - 64)
+        stepper(content, L["Square size"], "dispelSize", 20, y - 94, 2, 16, 48, "%d")
+        stepper(content, L["Columns"], "dispelColumns", 20, y - 120, 1, 1, 40, "%d")
+        stepper(content, L["Rows (at most)"], "dispelRows", 20, y - 146, 1, 1, 40, "%d")
+        local move = smallButton(content, L["Move"], 120, function() ns.Dispel.ToggleMove() end)
+        move:SetPoint("TOPLEFT", 20, y - 172)
+        y = y - 202
+    end
+
+    if ns.hasFamilies then
+        label(content, L["Combat buff grid"], "GameFontNormal"):SetPoint("TOPLEFT", 16, y - 14)
+        checkbox(content, L["In combat, one square per group member and buff, shown when the buff is missing"], "buffGrid", 16, y - 38)
+        checkbox(content, L["Names on the squares"], "buffGridNames", 16, y - 64)
+        stepper(content, L["Square size"], "buffGridSize", 20, y - 94, 2, 14, 40, "%d")
+        local move = smallButton(content, L["Move"], 120, function() ns.BuffGrid.ToggleMove() end)
+        move:SetPoint("TOPLEFT", 20, y - 120)
+        y = y - 150
+    end
+
+    -- Simulation : grille et fenêtre de dissipation comme en combat, avec de faux joueurs.
+    label(content, L["Simulation"], "GameFontNormal"):SetPoint("TOPLEFT", 16, y - 14)
+    stepper(content, L["Simulated players (5: group, more: raid)"], "previewCount", 20, y - 44, 1, 1, 40, "%d")
+    local simulate = smallButton(content, "", 200, function() ns.Preview.Toggle() end)
+    simulate:SetPoint("TOPLEFT", 20, y - 70)
+    refreshers[#refreshers + 1] = function()
+        simulate:SetText(ns.Preview.Active() and L["Stop the simulation"] or L["Simulate combat"])
+    end
+end
+
+-- Une page principale et trois sous-pages : priorités, combat, barres de nom.
+function Options.Create()
+    local root, content = newPage("FriendlyBuffer", 480)
+    buildGeneral(content)
+    handle = ns.Compat.RegisterOptions(root, "FriendlyBuffer")
+
+    local page
+    if ns.classData then
+        page, content = newPage(L["Priorities"], 560)
+        buildPersonal(content, buildPriorities(content, buildCopy(content, -50) - 10))
+        ns.Compat.RegisterSubOptions(handle, page, L["Priorities"], "FriendlyBuffer")
+    end
+
+    if ns.hasFamilies or ns.Dispels[ns.playerClass] then
+        page, content = newPage(L["Combat"], 540)
+        buildCombat(content)
+        ns.Compat.RegisterSubOptions(handle, page, L["Combat"], "FriendlyBuffer")
+    end
+
+    page, content = newPage(L["Nameplates"], 320)
+    buildNameplates(content)
+    ns.Compat.RegisterSubOptions(handle, page, L["Nameplates"], "FriendlyBuffer")
+end
+
+-- Réglage changé ailleurs (commande, changement de contexte) : met à jour les pages ouvertes.
 function Options.Refresh()
-    if panel and panel:IsShown() then
-        for _, refresh in ipairs(refreshers) do refresh() end
+    for _, page in ipairs(pages) do
+        if page:IsShown() then return refreshAll() end
     end
 end
 

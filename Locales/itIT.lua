@@ -140,3 +140,30 @@ L["your class has no dispel."] = "la tua classe non ha dissoluzione."
 L["Left click: show / hide the window"] = "Clic sinistro: mostra / nascondi la finestra"
 L["Right click: options"] = "Clic destro: opzioni"
 L["Drag: move this button"] = "Trascina: sposta questo pulsante"
+
+-- Grille de buffs de combat
+L["Combat buff grid"] = "Griglia dei potenziamenti in combattimento"
+L["In combat, one square per group member and buff, shown when the buff is missing"] = "In combattimento, una casella per membro del gruppo e potenziamento, visibile quando manca"
+L["Buffs: drag, /fb grid when done"] = "Potenziamenti: trascina, /fb grid per finire"
+L["the combat buff grid is off or your class has no buff for others."] = "la griglia dei potenziamenti in combattimento è disattivata o la tua classe non ha potenziamenti per gli altri."
+L["/fb grid (move the combat buff grid)"] = "/fb grid (sposta la griglia dei potenziamenti in combattimento)"
+
+-- Simulation
+L["Player %d"] = "Giocatore %d"
+L["simulation stopped: combat started."] = "simulazione interrotta: inizia il combattimento."
+L["/fb test (simulate combat with fake players)"] = "/fb test (simula un combattimento con giocatori finti)"
+L["Simulation"] = "Simulazione"
+L["Simulated players (5: group, more: raid)"] = "Giocatori simulati (5: gruppo, di più: incursione)"
+L["Stop the simulation"] = "Ferma la simulazione"
+L["Simulate combat"] = "Simula un combattimento"
+
+-- Pages des options
+L["Priorities"] = "Priorità"
+L["Combat"] = "Combattimento"
+L["Nameplates"] = "Targhette"
+
+-- Grille par joueur, colonnes de la dissipation
+L["Shift + left click: %s"] = "Maiusc + clic sinistro: %s"
+L["Shift + right click: %s"] = "Maiusc + clic destro: %s"
+L["Columns"] = "Colonne"
+L["Rows (at most)"] = "Righe (al massimo)"

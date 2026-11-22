@@ -56,6 +56,12 @@ local DEFAULTS = {
     dispel = true,          -- fenêtre de dissipation
     dispelSize = 26,        -- taille des cases de la fenêtre de dissipation
     dispelNames = true,     -- nom du joueur sur sa case
+    dispelColumns = 5,      -- cases par ligne de la fenêtre de dissipation
+    dispelRows = 8,         -- lignes au plus (les joueurs au-delà n'ont pas de case)
+    buffGrid = true,        -- grille de buffs de combat
+    buffGridSize = 22,      -- taille des cases de la grille de combat
+    buffGridNames = true,   -- nom du joueur au-dessus de ses cases
+    previewCount = 5,       -- joueurs simulés (simulation de combat des options)
     minimap = true,         -- bouton de la minicarte
 }
 

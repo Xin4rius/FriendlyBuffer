@@ -12,7 +12,6 @@ local Dispel = {}
 ns.Dispel = Dispel
 
 local MAX_SLOTS = 40
-local COLUMNS = 5
 local GAP = 3
 local THROTTLE = 0.1      -- délai minimum entre deux mises à jour déclenchées par événement
 local TICK = 0.5          -- rafraîchissement périodique (portée)
@@ -34,6 +33,7 @@ local dirty, layoutPending, since = true, false, 0
 -- Vrai dès PLAYER_REGEN_DISABLED : le verrou de combat n'est pas encore posé, mais les cases
 -- montrées à cet instant ne doivent plus être masquées.
 local fighting = false
+local previewing = false  -- cases remplies par la simulation (Preview)
 
 local function active()
     return ns.db.dispel and #spells > 0
@@ -44,13 +44,16 @@ end
 ---------------------------------------------------------------------------
 
 -- Débuff à retirer sur l'unité : présent, icône, type. Hors combat on lit les débuffs et on garde
--- ceux que nos sorts retirent ; quand les auras sont secrètes, on s'en remet au filtre du client.
+-- ceux que nos sorts retirent ; quand les auras sont secrètes, la mémoire tenue par Auras (débuffs
+-- vus hors combat encore présents, ajouts lisibles), puis le filtre du client.
 local function read(unit)
     if not UnitExists(unit) or UnitIsDeadOrGhost(unit) or not UnitCanAssist("player", unit) then return false end
-    if ns.Compat.AurasSecret() then return ns.Compat.DispellableSecret(unit) end
-    for _, debuff in ipairs(ns.Compat.GetDebuffs(unit)) do
-        if ns.Decision.DispelIndex(spells, debuff.dispelName) then return true, debuff.icon, debuff.dispelName end
+    for _, debuff in ipairs(ns.Auras.ReadDebuffs(unit)) do
+        if ns.Decision.DispelIndex(spells, debuff.dispelName) or debuff.dispellable == true then
+            return true, debuff.icon, debuff.dispelName
+        end
     end
+    if ns.Compat.AurasSecret() then return ns.Compat.DispellableSecret(unit) end
     return false
 end
 
@@ -61,26 +64,130 @@ function Dispel.Diagnose(unit)
     return normal, ns.Compat.DispellableSecret(unit)
 end
 
+-- Pour /fb debug : état brut du filtre client et de la case de l'unité (cause d'une case absente).
+function Dispel.Dump(unit)
+    local filter = "n/a"
+    if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
+        local ok, data = pcall(C_UnitAuras.GetAuraDataByIndex, unit, 1, "HARMFUL|RAID_PLAYER_DISPELLABLE")
+        if not ok then filter = "error: " .. tostring(data)
+        elseif data == nil then filter = "nil"
+        elseif ns.Compat.IsSecret(data) then filter = "secret"
+        else filter = type(data) end
+    end
+    local slot
+    for u, s in pairs(byUnit) do
+        if UnitIsUnit(u, unit) then slot = s end
+    end
+    local state = slot and string.format("slot %s shown=%s visible=%s alpha=%.2f present=%s", tostring(slot.unit),
+        tostring(slot:IsShown()), tostring(slot:IsVisible()), slot:GetAlpha(), tostring(slot.present)) or "no slot"
+    return string.format("dispel raw: aurasSecret=%s filter=%s fighting=%s frameShown=%s active=%s; %s",
+        tostring(ns.Compat.AurasSecret()), filter, tostring(fighting), tostring(frame and frame:IsShown()),
+        tostring(active()), state)
+end
+
+-- Temporaire (diagnostic) : quelles API d'auras restent utilisables en combat sur ce client.
+local lastAura = "none"
+function Dispel.Probe(unit)
+    local lines = {}
+    local function try(label, fn, ...)
+        if not fn then lines[#lines + 1] = label .. "=absent" return end
+        local ok, a, b = pcall(fn, ...)
+        local v = not ok and ("ERR " .. tostring(a):sub(1, 60))
+            or (ns.Compat.IsSecret(a) and "secret" or (type(a) == "table" and ("table#" .. #a) or tostring(a)))
+        if ok and b ~= nil then v = v .. "," .. (ns.Compat.IsSecret(b) and "secret" or tostring(b)) end
+        lines[#lines + 1] = label .. "=" .. v
+    end
+    local api = C_UnitAuras or {}
+    try("idxHarmful", api.GetAuraDataByIndex, unit, 1, "HARMFUL")
+    try("instIDs", api.GetUnitAuraInstanceIDs, unit, "HARMFUL|RAID_PLAYER_DISPELLABLE")
+    try("slots", api.GetAuraSlots, unit, "HARMFUL|RAID_PLAYER_DISPELLABLE")
+    try("unitSlots", UnitAuraSlots, unit, "HARMFUL|RAID_PLAYER_DISPELLABLE")
+    try("unitDebuff", UnitDebuff, unit, 1, "RAID")
+    local names = {}
+    for k in pairs(api) do
+        if type(k) == "string" and (k:find("Dispel") or k:find("Instance") or k:find("Secret") or k:find("Filter")) then
+            names[#names + 1] = k
+        end
+    end
+    table.sort(names)
+    lines[#lines + 1] = "lastUNIT_AURA=" .. lastAura
+    lines[#lines + 1] = "api: " .. table.concat(names, " ")
+    return lines
+end
+
+-- Identifiants d'auras reçus par UNIT_AURA (addedAuras), par GUID, pour tester les API par identifiant.
+local seenIds = {}
+function Dispel.NoteAura(unit, info)
+    if not byUnit[unit] or type(info) ~= "table" then return end
+    local guid = UnitGUID(unit)
+    if not guid then return end
+    local ids = seenIds[guid] or {}
+    seenIds[guid] = ids
+    for _, aura in ipairs(info.addedAuras or {}) do
+        local id = aura.auraInstanceID
+        if id and not ns.Compat.IsSecret(id) then
+            ids[id] = { harmful = aura.isHarmful, dtype = aura.dispelName, icon = aura.icon }
+        end
+    end
+    for _, id in ipairs(info.removedAuraInstanceIDs or {}) do ids[id] = nil end
+    local added = info.addedAuras
+    local first = added and added[1]
+    lastAura = string.format("%s full=%s added=%s firstId=%s", unit, tostring(info.isFullUpdate),
+        added and #added or "nil", first and (ns.Compat.IsSecret(first.auraInstanceID) and "secret"
+        or tostring(first.auraInstanceID)) or "-")
+end
+
+local function show(v)
+    if v == nil then return "nil" end
+    return ns.Compat.IsSecret(v) and "secret" or tostring(v)
+end
+
+-- Pour chaque identifiant connu de l'unité : champs de la charge utile et API par identifiant.
+function Dispel.ProbeIds(unit)
+    local lines = {}
+    local api = C_UnitAuras or {}
+    local ids = seenIds[UnitGUID(unit) or ""] or {}
+    for id, aura in pairs(ids) do
+        local ok1, filtered = pcall(api.IsAuraFilteredOutByInstanceID, unit, id, "HARMFUL|RAID_PLAYER_DISPELLABLE")
+        local ok2, data = pcall(api.GetAuraDataByAuraInstanceID, unit, id)
+        lines[#lines + 1] = string.format("id %s: harmful=%s dtype=%s icon=%s | filteredOut=%s | byId=%s",
+            tostring(id), show(aura.harmful), show(aura.dtype), show(aura.icon),
+            ok1 and show(filtered) or ("ERR " .. tostring(filtered):sub(1, 50)),
+            ok2 and (data and "table" or "nil") or ("ERR " .. tostring(data):sub(1, 50)))
+        if #lines >= 6 then break end
+    end
+    if #lines == 0 then lines[1] = "no aura id received for this unit" end
+    return lines
+end
+
 ---------------------------------------------------------------------------
 -- Affichage
 ---------------------------------------------------------------------------
 
+-- Joueur simulé (Preview) : mêmes informations que read(), sans API.
+local function readFake(fake)
+    if not fake.debuff then return false end
+    return true, fake.debuff.icon, fake.debuff.type
+end
+
 local function paint(slot)
-    local unit = slot.unit
-    local present, icon, dtype = read(unit)
+    local unit, fake = slot.unit, slot.fake
+    local present, icon, dtype
+    if fake then present, icon, dtype = readFake(fake) else present, icon, dtype = read(unit) end
     slot.present = present == true
     slot.dtype = dtype
     if slot.present then
         pcall(slot.icon.SetTexture, slot.icon, icon) -- icône éventuellement secrète : acceptée par SetTexture
         local c = TYPE_COLORS[dtype] or UNKNOWN_COLOR
         slot.border:SetColorTexture(c[1], c[2], c[3], 1)
-        local name = UnitName(unit)
+        local name = fake and fake.name or UnitName(unit)
         if name and not ns.Compat.IsSecret(name) then slot.name:SetText(name) end
-        local _, class = UnitClass(unit)
+        local class = fake and fake.class or select(2, UnitClass(unit))
         if class and not ns.Compat.IsSecret(class) then slot.name:SetTextColor(ns.Compat.ClassColor(class)) end
         slot.name:SetShown(ns.db.dispelNames)
-        local inRange = ns.Compat.InRange(spells[1].rank.id, unit)
-        slot:SetAlpha(inRange == false and OUT_OF_RANGE_ALPHA or 1)
+        local far
+        if fake then far = fake.far else far = ns.Compat.InRange(spells[1].rank.id, unit) == false end
+        slot:SetAlpha(far and OUT_OF_RANGE_ALPHA or 1)
     else
         slot:SetAlpha(0)
     end
@@ -106,26 +213,6 @@ local function macro(unit, index)
     return "/cast [@" .. unit .. "] " .. ns.CastString(spell.rank)
 end
 
--- { {unit, position}, ... } ; en raid, position = (groupe - 1) * 5 + rang dans le groupe.
-local function roster()
-    local list = {}
-    if IsInRaid() then
-        local filled = {}
-        for i = 1, GetNumGroupMembers() do
-            local _, _, subgroup = GetRaidRosterInfo(i)
-            subgroup = subgroup or 1
-            filled[subgroup] = (filled[subgroup] or 0) + 1
-            list[#list + 1] = { unit = "raid" .. i, position = (subgroup - 1) * COLUMNS + filled[subgroup] }
-        end
-    else
-        list[1] = { unit = "player", position = 1 }
-        if IsInGroup() then
-            for i = 1, GetNumSubgroupMembers() do list[#list + 1] = { unit = "party" .. i, position = i + 1 } end
-        end
-    end
-    return list
-end
-
 local function layout()
     if fighting or InCombatLockdown() then
         layoutPending = true
@@ -139,32 +226,44 @@ local function layout()
     end
     local size = ns.db.dispelSize
     byUnit = {}
-    local list = roster()
+    previewing = ns.Preview.Active()
+    -- Grille choisie dans les options : joueurs à la suite (ordre des groupes), au plus colonnes × lignes.
+    local columns = ns.db.dispelColumns
+    local list = previewing and ns.Preview.Layout() or ns.Scanner.GroupLayout(columns)
+    table.sort(list, function(a, b) return a.position < b.position end)
     local rows = 1
     for i, slot in ipairs(slots) do
-        local entry = list[i]
+        local entry = i <= columns * ns.db.dispelRows and list[i]
         slot:SetSize(size, size)
         slot.name:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", math.max(8, math.floor(size / 3)), "OUTLINE")
         if entry then
-            local index = entry.position - 1
+            local index = i - 1
             slot:ClearAllPoints()
-            slot:SetPoint("TOPLEFT", frame, "TOPLEFT", (index % COLUMNS) * (size + GAP), -math.floor(index / COLUMNS) * (size + GAP))
-            rows = math.max(rows, math.floor(index / COLUMNS) + 1)
-            slot.unit = entry.unit
-            byUnit[entry.unit] = slot
-            slot:SetAttribute("type1", "macro")
-            slot:SetAttribute("macrotext1", macro(entry.unit, 1))
-            slot:SetAttribute("type2", "macro")
-            slot:SetAttribute("macrotext2", macro(entry.unit, 2))
+            slot:SetPoint("TOPLEFT", frame, "TOPLEFT", (index % columns) * (size + GAP), -math.floor(index / columns) * (size + GAP))
+            rows = math.max(rows, math.floor(index / columns) + 1)
+            slot.fake = entry.fake
+            if entry.fake then
+                -- Case simulée : ne lance rien.
+                slot.unit = "none"
+                slot:SetAttribute("type1", nil)
+                slot:SetAttribute("type2", nil)
+            else
+                slot.unit = entry.unit
+                byUnit[entry.unit] = slot
+                slot:SetAttribute("type1", "macro")
+                slot:SetAttribute("macrotext1", macro(entry.unit, 1))
+                slot:SetAttribute("type2", "macro")
+                slot:SetAttribute("macrotext2", macro(entry.unit, 2))
+            end
         else
-            slot.unit = nil
+            slot.unit, slot.fake = nil, nil
             slot.present = false
             slot:SetAttribute("type1", nil)
             slot:SetAttribute("type2", nil)
             slot:Hide()
         end
     end
-    frame:SetSize(COLUMNS * (size + GAP) - GAP, rows * (size + GAP) - GAP)
+    frame:SetSize(math.min(columns, math.max(#list, 1)) * (size + GAP) - GAP, rows * (size + GAP) - GAP)
     frame:Show()
     update()
 end
@@ -178,7 +277,7 @@ end
 ---------------------------------------------------------------------------
 
 local function onEnter(slot)
-    if not slot.present or not slot.unit then return end
+    if not slot.present or not slot.unit or slot.fake then return end
     GameTooltip:SetOwner(slot, "ANCHOR_RIGHT")
     local name = UnitName(slot.unit)
     if name and not ns.Compat.IsSecret(name) then GameTooltip:AddLine(name) end
@@ -259,11 +358,14 @@ function Dispel.ToggleMove()
     layout()
 end
 
-local function onEvent(_, event, unit)
+local function onEvent(_, event, unit, info)
     if event == "UNIT_AURA" then
+        pcall(Dispel.NoteAura, unit, info)
         if byUnit[unit] then dirty = true end
     elseif event == "PLAYER_REGEN_DISABLED" then
         -- Dernier instant où les cases peuvent encore être montrées : toutes, transparentes si vides.
+        ns.Preview.OnCombat()
+        if previewing then layout() end
         fighting = true
         if anchor:IsShown() then anchor:Hide() end
         for _, slot in ipairs(slots) do
